@@ -311,7 +311,7 @@ def prelim_report_builder_node(state:OverAllState):
     
     prelim_report = llm_gemini.invoke(
         [SystemMessage(content=prelim_report_writer_agent_sys_instruction)]
-         + [HumanMessage(content=f"Draft the Prelimn Report, context: {state["diagnoses"].list_of_diags}")]
+         + [HumanMessage(content=f"Draft the Prelimn Report, context: {state['diagnoses'].list_of_diags}")]
     )
 
     return {"prelim_report": prelim_report.content}
@@ -332,7 +332,7 @@ def search_web_best_pracs(state: WebSearchState):
     tavily_client=TavilyClient(api_key=os.environ["TAVILY_API_KEY"])
 
     # Search
-    res = tavily_client.search(f"What are the best medical practises for: {state["disease"]}")
+    res = tavily_client.search(f"What are the best medical practises for: {state['disease']}")
     best_pracs =[]
     for doc in res["results"]:
         url = doc["url"]
@@ -354,7 +354,7 @@ def best_pracs_report_builder_node(state: OverAllState):
     
     best_practise_report = llm_gemini.invoke(
         [SystemMessage(content=best_pracs_report_writer_agent_sys_instruction)]
-         + [HumanMessage(content=f"Draft the Best Practises Report, context: {state["best_practises"]}")]
+         + [HumanMessage(content=f"Draft the Best Practises Report, context: {state['best_practises']}")]
     )
 
     return {"best_practise_report": best_practise_report.content}
