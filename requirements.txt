@@ -12,3 +12,4 @@ fastapi
 pypdf
 chromadb
 APScheduler
+python-multipart
