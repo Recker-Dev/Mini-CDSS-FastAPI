@@ -1,0 +1,16 @@
+python-dotenv
+langgraph
+langchain_community
+langchain_core
+langchain-google-genai
+langchain-groq
+langchain-text-splitters
+langchain-chroma
+tavily-python
+uvicorn
+pydantic
+fastapi
+pypdf
+streamlit
+gradio
+APScheduler
