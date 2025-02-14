@@ -29,7 +29,7 @@ load_dotenv()
 
 @app.post("/")
 def root():
-    return {"message":"Hello!"}
+    return {"message":os.environ["GOOGLE_APPLICATION_CREDENTIALS"]}
 
 def my_shutdown_job():
     print(f"Server shutting down at {datetime.datetime.now()}")
