@@ -26,6 +26,11 @@ scheduler.start()
 
 load_dotenv()  
 
+
+@app.post("/")
+def root():
+    return {"message":"Hello!"}
+
 def my_shutdown_job():
     print(f"Server shutting down at {datetime.datetime.now()}")
 
@@ -56,7 +61,7 @@ async def setting_api(input_data: APIInput):
 
 
 @app.post("/graphstart/")
-async def root(input_data: GraphInput):
+async def graphstart(input_data: GraphInput):
     # logger.debug(f'{input_data}')
     async def event_stream():
         thread = {"configurable": {"thread_id": input_data.thread_id}}
