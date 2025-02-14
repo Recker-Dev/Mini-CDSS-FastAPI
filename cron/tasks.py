@@ -1,9 +1,9 @@
 import chromadb
 import datetime
-import sys
-import os
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-from vectordb import delete_vector_collection
+# import sys
+# import os
+
+from config.vectordb import delete_vector_collection
 from .storage import vector_db_list
 
 

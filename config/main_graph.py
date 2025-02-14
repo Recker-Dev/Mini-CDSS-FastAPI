@@ -2,7 +2,7 @@ from langgraph.graph import START,END,StateGraph, MessagesState
 from langgraph.checkpoint.memory import MemorySaver
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langgraph.constants import Send
-from hugging_face_ner import  ner_extractor
+from .hugging_face_ner import  ner_extractor
 
 from langchain_groq import ChatGroq
 from langchain_google_genai import ChatGoogleGenerativeAI
@@ -253,7 +253,7 @@ def ner_extraction_validator(state: OverAllState):
     return {"post_ner_data":post_ner_data}
 
 def ner_report_builder_node(state: OverAllState):
-    from server import app
+
     """Create a NER Report in Mardown Format. """
     post_ner_data = state["post_ner_data"]
 
@@ -269,7 +269,6 @@ def ner_report_builder_node(state: OverAllState):
 
 def prelim_diagnosis_node(state: OverAllState):
     """Perform Prelim Diagnosis on the Patient Summary"""
-    from server import app
     post_ner_data = state["post_ner_data"]
 
     # print(F"FEEDBACK PROVIDED AS OF NOW:{state.get("human_prelim_feedback","")}")
