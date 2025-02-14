@@ -10,5 +10,5 @@ uvicorn
 pydantic
 fastapi
 pypdf
-gradio
+chromadb
 APScheduler
