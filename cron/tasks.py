@@ -16,6 +16,9 @@ def getCollectionName():
 def appendVectorName(collection_name: str):
     """ Append (collection_name, current_time) to vector_db_list """
     current_time = datetime.datetime.now()
+    for entry in vector_db_list:
+        if entry[0] == collection_name:
+            vector_db_list.remove(entry)
     vector_db_list.append((collection_name, current_time))
     print(f"Appended: {collection_name}, {current_time}")  # Debugging
 
