@@ -7,7 +7,7 @@ from groq import  Groq
 from google import genai
 import base64
 from google.genai import types
-# from .credentials import creds
+from .credentials import creds
 
 from dotenv import load_dotenv
 
