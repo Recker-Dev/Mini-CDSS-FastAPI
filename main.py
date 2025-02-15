@@ -262,7 +262,7 @@ async def process_image(query: str = Form(...), thread_id:str=Form(...), image: 
     async def trigger_graph(query: str, thread_id:str, base64_image: str):
         """Invoke graph with query and base64 image."""
         thread = {"configurable": {"thread_id": thread_id}}
-        graph.invoke({"query": query, "base64_image": base64_image}, thread)
+        vision_graph.invoke({"query": query, "base64_image": base64_image}, thread)
 
     try:
         # Convert image to Base64
@@ -270,7 +270,7 @@ async def process_image(query: str = Form(...), thread_id:str=Form(...), image: 
         base64_image = base64.b64encode(image_bytes).decode("utf-8")
         
         # Trigger graph function and await result
-        answer = await trigger_graph(query,  thread_id, base64_image)
+        await trigger_graph(query,  thread_id, base64_image)
         
         return {"graph triggered"}
 
