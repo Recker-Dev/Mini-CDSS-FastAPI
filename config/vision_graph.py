@@ -103,13 +103,14 @@ def process_image_gemini(state: OverAllState):
     image_bytes = base64.b64decode(base64_image)
 
     # Call Gemini Vision API
-    client = genai.Client(api_key=os.getenv("GOOGLE_API_KEY"))
+    client = genai.Client(api_key=os.getenv("GOOGLE_API_KEY"), credentials=creds)
     response = client.models.generate_content(
         model="gemini-2.0-flash-exp",
         contents=[
             query,
             types.Part.from_bytes(data=image_bytes, mime_type="image/jpeg")
         ],
+        
     )
 
     # print("Gemini Response: ", response.text)

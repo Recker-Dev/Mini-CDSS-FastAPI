@@ -13,4 +13,5 @@ pypdf
 chromadb
 APScheduler
 python-multipart
-google
+pillow
+google-genai
