@@ -7,7 +7,7 @@ from groq import  Groq
 from google import genai
 import base64
 from google.genai import types
-from .credentials import creds
+# from .credentials import creds
 
 from dotenv import load_dotenv
 
@@ -103,7 +103,7 @@ def process_image_gemini(state: OverAllState):
     image_bytes = base64.b64decode(base64_image)
 
     # Call Gemini Vision API
-    client = genai.Client(api_key=os.getenv("GOOGLE_API_KEY"), credentials=creds)
+    client = genai.Client(api_key=os.getenv("GOOGLE_API_KEY"))
     response = client.models.generate_content(
         model="gemini-2.0-flash-exp",
         contents=[
