@@ -13,3 +13,4 @@ pypdf
 chromadb
 APScheduler
 python-multipart
+google
