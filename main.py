@@ -283,7 +283,7 @@ async def process_image_answer(thread_id: str = Form(...)):
 
     thread = {"configurable": {"thread_id": thread_id}}
     async def event_stream():
-            final_state = graph.get_state(thread)
+            final_state = vision_graph.get_state(thread)
             answer = final_state.values.get('answer')
             yield f"{answer}"
         
