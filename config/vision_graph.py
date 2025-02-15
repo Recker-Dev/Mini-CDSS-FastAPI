@@ -1,5 +1,4 @@
 from langchain_google_genai import ChatGoogleGenerativeAI
-from dotenv import load_dotenv
 import os
 from langgraph.graph import START,END,StateGraph, MessagesState
 from langgraph.checkpoint.memory import MemorySaver
@@ -8,10 +7,11 @@ from groq import  Groq
 from google import genai
 import base64
 from google.genai import types
+from .credentials import creds
 
+from dotenv import load_dotenv
 
-from typing_extensions import  TypedDict, List, Literal, Optional
-from pydantic import BaseModel
+from typing_extensions import  TypedDict
 
 class OverAllState(TypedDict):
     query: str
@@ -123,10 +123,11 @@ def build_answer(state: OverAllState):
     # if (state["gemini_response"] or state["llama_response"] ) and (state["prompt_analyzer_response"] == "yes"):
 
     llm_gemini = ChatGoogleGenerativeAI(api_key=os.getenv("GOOGLE_API_KEY"),
-                             model="gemini-2.0-flash-exp")
+                             model="gemini-2.0-flash-exp",
+                             credentials=creds)
         
     response = llm_gemini.invoke([SystemMessage(content=answer_writing_instruction)]+ [HumanMessage(
-        content=f"Produce an answer,based on\n QUERY: {state["query"]}\n GEMINI RESPONSE:{state["gemini_response"]}\n LLAMA REPONSE: {state["llama_response"]}")])
+        content=f"Produce an answer,based on\n QUERY: {state['query']}\n GEMINI RESPONSE:{state['gemini_response']}\n LLAMA REPONSE: {state['llama_response']}")])
         
     # print("ANSWER NODE TRIGGERED")
     return {"answer":response.content}

@@ -7,11 +7,6 @@ from config.vectordb import delete_vector_collection
 from .storage import vector_db_list
 
 
-def getCollectionName():
-    chroma_client = chromadb.PersistentClient(path=".chroma")
-    print(chroma_client.list_collections())
-    return chroma_client.list_collections()
-
 
 def appendVectorName(collection_name: str):
     """ Append (collection_name, current_time) to vector_db_list """
@@ -31,10 +26,12 @@ def trackVectorDBList():
         if giveTimeDiff(datetime.datetime.now(),collection_save_time) >= 15:
             collection_name = entry[0]
             delete_vector_collection(chroma_client=chromadb.PersistentClient(path=".chroma"),collection_name=collection_name)
-            print(f"Removed: {collection_name}, it has overstayed its welcome (15 mins).")
             vector_db_list.remove(entry)
+            print(f"Removed: {collection_name}, it has overstayed its welcome (15 mins).")
+            return f"Removed: {collection_name}, it has overstayed its welcome (15 mins)."
     
     print(f"Currently tracked vectorDBs: {vector_db_list}")
+    return f"Currently tracked vectorDBs: {vector_db_list}"
 
 
 def flushVectorDB():
