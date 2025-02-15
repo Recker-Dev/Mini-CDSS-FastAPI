@@ -9,10 +9,16 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from tavily import TavilyClient
 from dotenv import load_dotenv
 import os
+from google.oauth2 import service_account
+import base64
+import json
+
 load_dotenv()
 
 # from llm import llm_gemini,llm_groq
 # from main_graph_tools import tavily_client
+
+
 
 
 
