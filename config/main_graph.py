@@ -3,15 +3,13 @@ from langgraph.checkpoint.memory import MemorySaver
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langgraph.constants import Send
 from .hugging_face_ner import  ner_extractor
+from .credentials import creds
 
 from langchain_groq import ChatGroq
 from langchain_google_genai import ChatGoogleGenerativeAI
 from tavily import TavilyClient
 from dotenv import load_dotenv
 import os
-from google.oauth2 import service_account
-import base64
-import json
 
 load_dotenv()
 
@@ -226,6 +224,7 @@ def ner_extraction_validator(state: OverAllState):
 
     llm_gemini = ChatGoogleGenerativeAI(api_key=os.getenv("GOOGLE_API_KEY"),
                             model="gemini-2.0-flash-exp",
+                            credentials=creds
                             )
 
     summarized_report = llm_gemini.invoke(
@@ -235,8 +234,10 @@ def ner_extraction_validator(state: OverAllState):
 
     # tagged_tokens, unique_tags = process_ner_output(initial_summary+" "+medical_report)
     # report = generate_clean_ner_report(tagged_tokens, unique_tags)
-
-    ner_report = ner_extractor(summarized_report.content)
+    try:
+        ner_report = ner_extractor(summarized_report.content)
+    except:
+        ner_report = ""
 
     llm_groq = ChatGroq(
         model="llama-3.1-8b-instant",
@@ -252,7 +253,7 @@ def ner_extraction_validator(state: OverAllState):
 
     post_ner_data = structured_llm.invoke(
         [SystemMessage(content=ner_validation_agent_sys_instruction)]+[HumanMessage(
-            content=f"Validate the NER Report made by hugging face model : {ner_report}, on the input text of: {summarized_report.content}")]
+            content=f"Validate the NER Report made by hugging face model (if any) : {ner_report}, on the input text of: {summarized_report.content}")]
         )
 
     
@@ -265,6 +266,7 @@ def ner_report_builder_node(state: OverAllState):
 
     llm_gemini = ChatGoogleGenerativeAI(api_key=os.getenv("GOOGLE_API_KEY"),
                                 model="gemini-2.0-flash-exp",
+                                credentials=creds
                                 )
 
     report = llm_gemini.invoke(
@@ -282,6 +284,7 @@ def prelim_diagnosis_node(state: OverAllState):
     ## Enfore Output
     llm_gemini = ChatGoogleGenerativeAI(api_key=os.getenv("GOOGLE_API_KEY"),
                                 model="gemini-2.0-flash-exp",
+                                credentials=creds
                                 )
 
     structured_llm = llm_gemini.with_structured_output(Diagnoses)
@@ -313,6 +316,7 @@ def prelim_report_builder_node(state:OverAllState):
     """Create Prelim Report in NER format"""
     llm_gemini = ChatGoogleGenerativeAI(api_key=os.getenv("GOOGLE_API_KEY"),
                                 model="gemini-2.0-flash-exp",
+                                credentials=creds
                                 )
     
     prelim_report = llm_gemini.invoke(
@@ -356,6 +360,7 @@ def best_pracs_report_builder_node(state: OverAllState):
     """Best Practises Report Writing Node"""
     llm_gemini = ChatGoogleGenerativeAI(api_key=os.getenv("GOOGLE_API_KEY"),
                                 model="gemini-2.0-flash-exp",
+                                credentials=creds
                                 )
     
     best_practise_report = llm_gemini.invoke(

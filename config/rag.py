@@ -7,6 +7,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 import chromadb
 import chromadb.utils.embedding_functions as embedding_functions
 import os
+from .credentials import creds
 
 class Query(BaseModel):
     query:str
@@ -96,6 +97,7 @@ def frame_queries(state: OverAllState):
     ))]
     llm_gemini = ChatGoogleGenerativeAI(api_key=os.getenv("GOOGLE_API_KEY"),
                                 model="gemini-2.0-flash-exp",
+                                credentials=creds
                                 )
 
     structured_llm = llm_gemini.with_structured_output(QueryList)
@@ -135,6 +137,7 @@ def check_relevance(state: OverAllState):
     ))]
     llm_gemini = ChatGoogleGenerativeAI(api_key=os.getenv("GOOGLE_API_KEY"),
                                 model="gemini-2.0-flash-exp",
+                                credentials=creds
                                 )
 
     structured_llm = llm_gemini.with_structured_output(Relevance)
@@ -166,6 +169,7 @@ def draft_answer(state: OverAllState):
     ))]
     llm_gemini = ChatGoogleGenerativeAI(api_key=os.getenv("GOOGLE_API_KEY"),
                                 model="gemini-2.0-flash-exp",
+                                credentials=creds
                                 )
 
     response = llm_gemini.invoke(sys_prompt+[HumanMessage(content="Draft the answer")])

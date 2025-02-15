@@ -2,6 +2,7 @@ from tavily import TavilyClient
 from tavily.errors import InvalidAPIKeyError
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_groq import ChatGroq
+from .credentials import creds
 import os
 
 
@@ -24,7 +25,8 @@ def validate_gemini(gemini_api):
 
 
     llm_gemini = ChatGoogleGenerativeAI(api_key=gemini_api,
-                             model="gemini-2.0-flash-exp")
+                             model="gemini-2.0-flash-exp",
+                             credentials=creds)
 
     
     try:

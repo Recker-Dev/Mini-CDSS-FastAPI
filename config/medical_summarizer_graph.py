@@ -8,21 +8,11 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langgraph.constants import Send
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_groq import ChatGroq
+
+
 import os
+from .credentials import creds
 
-from google.oauth2 import service_account
-import base64
-import json
-
-encoded_creds = os.getenv("GOOGLE_CREDENTIALS_BASE64")
-# Decode and load the JSON credentials
-try:
-    decoded_creds = base64.b64decode(encoded_creds).decode("utf-8")
-    service_account_info = json.loads(decoded_creds)
-    credentials = service_account.Credentials.from_service_account_info(service_account_info)
-except Exception as e:
-    raise ValueError("Failed to decode credentials") from e
 
 class OverAllState(TypedDict):
     files: List
@@ -104,7 +94,7 @@ def extract_medical_insights(state:DocumentPages):
     sys_prompt = [SystemMessage(content=detail_extractor_sys_mssg)]
     llm_gemini = ChatGoogleGenerativeAI(api_key=os.getenv("GOOGLE_API_KEY"),
                                 model="gemini-2.0-flash-exp",
-                                credentials=credentials,
+                                credentials=creds,
                                 )
     
     
@@ -126,7 +116,7 @@ def draft_report(state:OverAllState):
     # )
     llm_gemini = ChatGoogleGenerativeAI(api_key=os.getenv("GOOGLE_API_KEY"),
                                 model="gemini-2.0-flash-exp",
-                                credentials=credentials
+                                credentials=creds
                                 )
     # structured_llm = llm_groq.with_structured_output(Report)
 
