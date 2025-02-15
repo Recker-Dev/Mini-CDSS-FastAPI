@@ -6,6 +6,7 @@ from fastapi.responses import StreamingResponse
 from dotenv import load_dotenv
 import os
 import datetime
+import base64
 
 from typing import List, Optional
 
@@ -14,6 +15,7 @@ from config.validate_api import validate_keys
 from config.main_graph import graph
 from config.rag import rag_graph
 from config.medical_summarizer_graph import medical_insights_graph
+from config.vision_graph import vision_graph
 
 
 from cron.jobs import scheduler
@@ -250,3 +252,42 @@ async def medical_report_insight(thread: Thread):
         yield f"{medical_report}"
         
     return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+
+
+@app.post("/process-image/")
+async def process_image(query: str = Form(...), thread_id:str=Form(...), image: UploadFile = File(...)):
+    """API endpoint to process an image and query."""
+    
+    async def trigger_graph(query: str, thread_id:str, base64_image: str):
+        """Invoke graph with query and base64 image."""
+        thread = {"configurable": {"thread_id": thread_id}}
+        graph.invoke({"query": query, "base64_image": base64_image}, thread)
+
+    try:
+        # Convert image to Base64
+        image_bytes = await image.read()
+        base64_image = base64.b64encode(image_bytes).decode("utf-8")
+        
+        # Trigger graph function and await result
+        answer = await trigger_graph(query,  thread_id, base64_image)
+        
+        return {"graph triggered"}
+
+    except Exception as e:
+        return {f"graph failed, error: {e}"}
+    
+@app.post("/process-image-answer/")
+async def process_image_answer(thread_id: str = Form(...)):
+
+
+    thread = {"configurable": {"thread_id": thread_id}}
+    async def event_stream():
+            final_state = graph.get_state(thread)
+            answer = final_state.values.get('answer')
+            yield f"{answer}"
+        
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+
+
