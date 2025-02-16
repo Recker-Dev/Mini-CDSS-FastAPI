@@ -60,35 +60,37 @@ def process_image_llama(state: OverAllState):
     client = Groq(api_key=os.getenv("GROQ_API_KEY")) 
     query = state["query"]
     base64_image = state["base64_image"]
-
-    messages = [
-        {
-            "role": "user",
-            "content": [
-                {
-                    "type": "text",
-                    "text": f"{query}"
-                },
-                {
-                    "type": "image_url",
-                    "image_url": {
-                        "url": f"data:image/jpeg;base64,{base64_image}"
+    try:
+        messages = [
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": f"{query}"
+                    },
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:image/jpeg;base64,{base64_image}"
+                        }
                     }
-                }
-            ]
-        }
-    ]
+                ]
+            }
+        ]
 
-    chat_completion = client.chat.completions.create(
-        messages=messages,
-        model="llama-3.2-90b-vision-preview"
-    )
+        chat_completion = client.chat.completions.create(
+            messages=messages,
+            model="llama-3.2-90b-vision-preview"
+        )
 
-    # Correct variable name used for response extraction.
-    response = chat_completion.choices[0].message.content
+        # Correct variable name used for response extraction.
+        llama_response = chat_completion.choices[0].message.content
+    except Exception as e:
+        llama_response = "Llama had issues with processing."
     # print("Llama Response: ", response)
     # print("LLAMA TRIGGERED")
-    return {"llama_response": response}
+    return {"llama_response": llama_response}
     # return {"llama_response": "got"}
     
 
@@ -102,20 +104,24 @@ def process_image_gemini(state: OverAllState):
     # Decode base64 string to bytes
     image_bytes = base64.b64decode(base64_image)
 
-    # Call Gemini Vision API
-    client = genai.Client(api_key=os.getenv("GOOGLE_API_KEY"))
-    response = client.models.generate_content(
-        model="gemini-2.0-flash-exp",
-        contents=[
-            query,
-            types.Part.from_bytes(data=image_bytes, mime_type="image/jpeg")
-        ],
-        
-    )
+    try:
+        # Call Gemini Vision API
+        client = genai.Client(api_key=os.getenv("GOOGLE_API_KEY"))
+        response = client.models.generate_content(
+            model="gemini-2.0-flash-exp",
+            contents=[
+                query,
+                types.Part.from_bytes(data=image_bytes, mime_type="image/jpeg")
+            ],
+            
+        )
+        gemini_response = response.text
+    except Exception as e:
+        gemini_response = "Gemini had issues with processing."
 
     # print("Gemini Response: ", response.text)
     # print("GEMINI TRIGGERED")
-    return {"gemini_response": response.text}
+    return {"gemini_response": gemini_response}
     # return {"gemini_response": "got"}
 
 
@@ -128,7 +134,7 @@ def build_answer(state: OverAllState):
                              credentials=creds)
         
     response = llm_gemini.invoke([SystemMessage(content=answer_writing_instruction)]+ [HumanMessage(
-        content=f"Produce an answer,based on\n QUERY: {state['query']}\n GEMINI RESPONSE:{state['gemini_response']}\n LLAMA REPONSE: {state['llama_response']}")])
+        content=f"Produce an answer,based on\n QUERY: {state['query']}\n GEMINI RESPONSE:{state['gemini_response']}\n LLAMA REPONSE: {state['llama_response']}. If either of the response has issues with processing input, mention it.")])
         
     # print("ANSWER NODE TRIGGERED")
     return {"answer":response.content}
