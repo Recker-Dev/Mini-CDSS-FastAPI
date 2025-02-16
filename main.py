@@ -3,6 +3,7 @@ from config.vectordb import create_vector_db
 from langchain_community.document_loaders import PyPDFLoader
 from fastapi import FastAPI, HTTPException, File, UploadFile, Form, HTTPException
 from fastapi.responses import StreamingResponse
+from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 import os
 import datetime
@@ -25,6 +26,13 @@ app = FastAPI()
 
 scheduler.start()
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allows all origins
+    allow_credentials=True,
+    allow_methods=["*"],  # Allows all methods (GET, POST, PUT, DELETE, etc.)
+    allow_headers=["*"],  # Allows all headers
+)
 
 load_dotenv()  
 
