@@ -29,9 +29,9 @@ scheduler.start()
 load_dotenv()  
 
 
-@app.post("/")
+@app.get("/ping")
 def root():
-    return {"message":os.environ["GOOGLE_APPLICATION_CREDENTIALS"]}
+    return "PONG"
 
 def my_shutdown_job():
     print(f"Server shutting down at {datetime.datetime.now()}")
