@@ -263,14 +263,14 @@ async def medical_report_insight(thread: Thread):
 
 
 
-@app.post("/process-image/")
-async def process_image(query: str = Form(...), thread_id:str=Form(...), image: UploadFile = File(...)):
-    """API endpoint to process an image and query."""
+@app.post("/input-image/")
+async def input_image(thread_id:str=Form(...), image: UploadFile = File(...)):
+    """API endpoint to start vision graph with an image."""
     
-    async def trigger_graph(query: str, thread_id:str, base64_image: str):
-        """Invoke graph with query and base64 image."""
+    async def start_graph(thread_id:str, base64_image: str):
+        """Invoke graph with base64 image."""
         thread = {"configurable": {"thread_id": thread_id}}
-        vision_graph.invoke({"query": query, "base64_image": base64_image}, thread)
+        vision_graph.invoke({"base64_image": base64_image}, thread,)
 
     try:
         # Convert image to Base64
@@ -278,14 +278,29 @@ async def process_image(query: str = Form(...), thread_id:str=Form(...), image: 
         base64_image = base64.b64encode(image_bytes).decode("utf-8")
         
         # Trigger graph function and await result
-        await trigger_graph(query,  thread_id, base64_image)
+        await start_graph(thread_id, base64_image)
         
-        return {"graph triggered"}
+        return {"graph started, image input success!"}
 
     except Exception as e:
         return {f"graph failed, error: {e}"}
+
+@app.post("/input-query/")
+async def input_query_for_image(thread_id:str=Form(...),query: str = Form(...)):
+
+    async def resume_graph(thread_id:str, query: str):
+        thread = {"configurable": {"thread_id": thread_id}}
+        vision_graph.update_state(thread,{"query":query},as_node="enter query")
+        vision_graph.invoke(None, thread)
+
+    try:
+        await resume_graph(thread_id,query)
+        return {"Graph was resumed and query was taken into account. Check formed answer"}
+    except Exception as e:
+        return {f"graph failed, error: {e}"}
     
-@app.post("/process-image-answer/")
+    
+@app.post("/vision-answer/")
 async def process_image_answer(thread_id: str = Form(...)):
 
 
@@ -297,5 +312,19 @@ async def process_image_answer(thread_id: str = Form(...)):
         
     return StreamingResponse(event_stream(), media_type="text/event-stream")
 
+
+@app.post("/vision-feedback")
+async def process_vision_feedback(thread_id: str = Form(...), feedback: str= Form(...)):
+
+    async def resume_graph(thread_id:str, feedback: str):
+        thread = {"configurable": {"thread_id": thread_id}}
+        vision_graph.update_state(thread, {"feedback":feedback}, as_node="human feedback")
+        vision_graph.invoke(None,thread)
+
+    try:
+        await resume_graph(thread_id,feedback)
+        return {"Graph was resumed and feedback was taken into account."}
+    except Exception as e:
+        return {f"graph failed, error: {e}"} 
 
 

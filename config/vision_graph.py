@@ -1,4 +1,5 @@
 from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_groq import ChatGroq
 import os
 from langgraph.graph import START,END,StateGraph, MessagesState
 from langgraph.checkpoint.memory import MemorySaver
@@ -8,10 +9,15 @@ from google import genai
 import base64
 from google.genai import types
 from .credentials import creds
+import time
 
 from dotenv import load_dotenv
 
-from typing_extensions import  TypedDict
+load_dotenv()
+
+
+from typing_extensions import  TypedDict, Literal
+from pydantic import BaseModel
 
 class OverAllState(TypedDict):
     query: str
@@ -19,11 +25,10 @@ class OverAllState(TypedDict):
     llama_response: str
     gemini_response: str
     answer:str
-    
+    feedback: str
 
-
-load_dotenv()
-
+class VisionModelDecisionEdgeOutput(BaseModel):
+    outcome: Literal["retrigger image models", "rebuild answer", "end"]
 
 
 
@@ -40,11 +45,14 @@ Analyze the prompt and return your answer in the format:
 or
 **no**
 '''
+
 answer_writing_instruction ="""
 You are an AI assistant that summarizes medical image analysis results concisely for users. 
 
 Based on the given inputs, generate a **brief, user-friendly summary** of the most likely condition.
-Output should be as markdown, divide properly in points and subpoints.
+Gemini Output: `{gemini_output}` 
+AND
+Llama Output:  `{llama_output}`
 
 Constraints:
 - Keep the response **to the point**.
@@ -56,42 +64,43 @@ Constraints:
 """
 
 
+def get_user_query(state:OverAllState):
+    pass
+
 def process_image_llama(state: OverAllState):
     client = Groq(api_key=os.getenv("GROQ_API_KEY")) 
     query = state["query"]
     base64_image = state["base64_image"]
-    try:
-        messages = [
-            {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "text",
-                        "text": f"{query}"
-                    },
-                    {
-                        "type": "image_url",
-                        "image_url": {
-                            "url": f"data:image/jpeg;base64,{base64_image}"
-                        }
+    human_feedback = state.get("feedback","")
+
+    messages = [
+        {
+            "role": "user",
+            "content": [
+                {
+                    "type": "text",
+                    "text": f"{query}. Consider this feeback(if any): {human_feedback}"
+                },
+                {
+                    "type": "image_url",
+                    "image_url": {
+                        "url": f"data:image/jpeg;base64,{base64_image}"
                     }
-                ]
-            }
-        ]
+                }
+            ]
+        }
+    ]
 
-        chat_completion = client.chat.completions.create(
-            messages=messages,
-            model="llama-3.2-90b-vision-preview"
-        )
+    chat_completion = client.chat.completions.create(
+        messages=messages,
+        model="llama-3.2-90b-vision-preview"
+    )
 
-        # Correct variable name used for response extraction.
-        llama_response = chat_completion.choices[0].message.content
-    except Exception as e:
-        llama_response = "Llama had issues with processing."
-    # print("Llama Response: ", response)
-    # print("LLAMA TRIGGERED")
-    return {"llama_response": llama_response}
-    # return {"llama_response": "got"}
+    # Correct variable name used for response extraction.
+    response = chat_completion.choices[0].message.content
+
+    return {"llama_response": response}
+
     
 
 
@@ -100,59 +109,89 @@ def process_image_gemini(state: OverAllState):
     """Processes an image with Google Gemini Vision model."""
     query = state["query"]
     base64_image = state["base64_image"]
-
+    human_feedback = state.get("feedback","")
     # Decode base64 string to bytes
     image_bytes = base64.b64decode(base64_image)
 
-    try:
-        # Call Gemini Vision API
-        client = genai.Client(api_key=os.getenv("GOOGLE_API_KEY"))
-        response = client.models.generate_content(
-            model="gemini-2.0-flash-exp",
-            contents=[
-                query,
-                types.Part.from_bytes(data=image_bytes, mime_type="image/jpeg")
-            ],
-            
-        )
-        gemini_response = response.text
-    except Exception as e:
-        gemini_response = "Gemini had issues with processing."
+    # Call Gemini Vision API
+    client = genai.Client(credentials=creds)
+    response = client.models.generate_content(
+        model="gemini-2.0-flash-exp",
+        contents=[
+            f"{query}.Consider this feeback(if any): {human_feedback}",
+            types.Part.from_bytes(data=image_bytes, mime_type="image/jpeg")
+        ],
+    )
 
-    # print("Gemini Response: ", response.text)
-    # print("GEMINI TRIGGERED")
-    return {"gemini_response": gemini_response}
-    # return {"gemini_response": "got"}
+    return {"gemini_response": response.text}
+
 
 
 
 def build_answer(state: OverAllState):
     # if (state["gemini_response"] or state["llama_response"] ) and (state["prompt_analyzer_response"] == "yes"):
+    human_feedback = state.get("feedback","")
+    prev_answer = state.get("answer","")
 
+    # llm_gemini = ChatGoogleGenerativeAI(api_key=os.getenv("GOOGLE_API_KEY"),
+    #                          model="gemini-2.0-flash-exp",
+    #                          credentials=creds)
+    
+    llm_groq = ChatGroq(
+        model="llama-3.3-70b-versatile",
+        temperature=0,
+        max_tokens=None,
+        api_key=os.getenv("GROQ_API_KEY")
+    )
+
+    response = llm_groq.invoke(answer_writing_instruction.format(gemini_output=state["gemini_response"],
+                                                                   llama_output= state["llama_response"])+f"Consider the feedback(if any): {human_feedback} and the report generated(if any): {prev_answer} ")
+
+    return {"answer":response.content}
+
+
+def human_feedback(state: OverAllState):
+    pass
+
+def should_trigger_feedback_edge(state: OverAllState):
+    human_feedback = state.get("feedback","")
     llm_gemini = ChatGoogleGenerativeAI(api_key=os.getenv("GOOGLE_API_KEY"),
                              model="gemini-2.0-flash-exp",
                              credentials=creds)
-        
-    response = llm_gemini.invoke([SystemMessage(content=answer_writing_instruction)]+ [HumanMessage(
-        content=f"Produce an answer,based on\n QUERY: {state['query']}\n GEMINI RESPONSE:{state['gemini_response']}\n LLAMA REPONSE: {state['llama_response']}. If either of the response has issues with processing input, mention it.")])
-        
-    # print("ANSWER NODE TRIGGERED")
-    return {"answer":response.content}
+
+    structured_llm = llm_gemini.with_structured_output(VisionModelDecisionEdgeOutput)
+    response = structured_llm.invoke([HumanMessage(content=f"Based on the feedback provided decide wether to retrigger vision models/ rebuild answer/ end graph. Feeback: {human_feedback}")])
+
+    if response.outcome == "retrigger image models":
+        return ["process image llama","process image gemini"]
+    
+    if response.outcome == "rebuild answer":
+        return "build answer"
+    
+    if response.outcome == "end":
+        return END
 
 
 # Build a simple graph with one node.
 builder = StateGraph(OverAllState)
+builder.add_node("enter query",get_user_query)
 builder.add_node("process image llama", process_image_llama)
-# builder.add_node("prompt analyzer", prompt_analyzer)
 builder.add_node("process image gemini",process_image_gemini)
 builder.add_node("build answer", build_answer)
+builder.add_node("human feedback", human_feedback)
 
-builder.add_edge(START, "process image llama")
-# builder.add_edge(START,"prompt analyzer")
-builder.add_edge(START, "process image gemini")
+builder.add_edge(START, "enter query")
+builder.add_edge("enter query", "process image llama")
+builder.add_edge("enter query", "process image gemini")
 builder.add_edge("process image llama", "build answer")
 builder.add_edge("process image gemini", "build answer")
-# builder.add_edge("prompt analyzer", "build answer")
-builder.add_edge("build answer", END)
+builder.add_edge("build answer","human feedback")
+builder.add_conditional_edges(
+    "human feedback",
+    should_trigger_feedback_edge,
+    ["process image llama","process image gemini","build answer", END]
+)
+
 memory = MemorySaver()
-vision_graph = builder.compile(checkpointer=memory)
+vision_graph = builder.compile(checkpointer=memory, interrupt_before=["human feedback","enter query"])
+vision_graph
