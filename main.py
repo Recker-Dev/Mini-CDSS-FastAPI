@@ -11,7 +11,7 @@ import base64
 
 from typing import List, Optional
 
-from config.fastapi_models import Thread,GraphInput,PrelimInterrupt,APIInput,RagChat
+from config.fastapi_models import Thread,GraphInput,PrelimInterrupt,APIInput,RagChat,VisionInput,VisionFeedback
 from config.validate_api import validate_keys
 from config.main_graph import graph
 from config.rag import rag_graph
@@ -286,7 +286,7 @@ async def input_image(thread_id:str=Form(...), image: UploadFile = File(...)):
         return {f"graph failed, error: {e}"}
 
 @app.post("/input-query/")
-async def input_query_for_image(thread_id:str=Form(...),query: str = Form(...)):
+async def input_query_for_image(input_data:VisionInput):
 
     async def resume_graph(thread_id:str, query: str):
         thread = {"configurable": {"thread_id": thread_id}}
@@ -294,17 +294,17 @@ async def input_query_for_image(thread_id:str=Form(...),query: str = Form(...)):
         vision_graph.invoke(None, thread)
 
     try:
-        await resume_graph(thread_id,query)
+        await resume_graph(input_data.thread_id,input_data.query)
         return {"Graph was resumed and query was taken into account. Check formed answer"}
     except Exception as e:
         return {f"graph failed, error: {e}"}
     
     
 @app.post("/vision-answer/")
-async def process_image_answer(thread_id: str = Form(...)):
+async def process_image_answer(input_data:Thread):
 
 
-    thread = {"configurable": {"thread_id": thread_id}}
+    thread = {"configurable": {"thread_id": input_data.thread_id}}
     async def event_stream():
             final_state = vision_graph.get_state(thread)
             answer = final_state.values.get('answer')
@@ -313,8 +313,8 @@ async def process_image_answer(thread_id: str = Form(...)):
     return StreamingResponse(event_stream(), media_type="text/event-stream")
 
 
-@app.post("/vision-feedback")
-async def process_vision_feedback(thread_id: str = Form(...), feedback: str= Form(...)):
+@app.post("/vision-feedback/")
+async def process_vision_feedback(input_data:VisionFeedback):
 
     async def resume_graph(thread_id:str, feedback: str):
         thread = {"configurable": {"thread_id": thread_id}}
@@ -322,7 +322,7 @@ async def process_vision_feedback(thread_id: str = Form(...), feedback: str= For
         vision_graph.invoke(None,thread)
 
     try:
-        await resume_graph(thread_id,feedback)
+        await resume_graph(input_data.thread_id,input_data.feedback)
         return {"Graph was resumed and feedback was taken into account."}
     except Exception as e:
         return {f"graph failed, error: {e}"} 

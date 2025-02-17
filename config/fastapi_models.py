@@ -27,3 +27,10 @@ class RagChat(BaseModel):
     question: str
     gemini: Optional[str]  
     
+class VisionInput(BaseModel):
+    thread_id: str
+    query: str
+
+class VisionFeedback(BaseModel):
+    thread_id: str
+    feedback: str
