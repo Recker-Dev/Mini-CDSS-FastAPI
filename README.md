@@ -6,9 +6,9 @@ FASTAPI Backend Server Code to efficiently handle code for Mini-CDSS Project.
 
 ## 📖 Description
 
-Mini-CDSS helps doctors to take an intiial patient encounter and creates an initial patient report, give diagnosis and even use Tavily Web Search to find all the relevant Best Practises.
+Mini-CDSS helps doctors to take an initial patient encounter and creates an initial patient report, give diagnosis and even use Tavily Web Search to find all the relevant Best Practises.
 The Doctor can also extract medical insights from any uploaded documents before processing with the reporting system. We also allow the doctor to RAG - Chat with the uploaded documents.
-The Doctor can also use our vision model to upload any iamges and query from it, give feedback etc.
+The Doctor can also use our vision model to upload any images and query from it, give feedback etc.
 
 AIM: Founding Steps of Next-gen CDSS systems, incorporating Gen-AI in report building, multimodal capabilities, CDSS is a highly rigid rule based system, Gen-AI introduces flexibility, context-awareness for fundamental systems to work on, and leveraging frameworks like Langgraph and Pydantic it is possible not only to reduce LLM Hallucination but also introduce dynamic real-time decision branches based on simple text.
 
@@ -74,11 +74,11 @@ pip install -r requirements.txt
 
 Create `.env` file and put
 
-- "GOOGLE_CREDENTIALS_BASE64"
-- "GOOGLE_API_KEY" ,
-- "TAVILY_API_KEY",
-- "GROQ_API_KEY",
-- "HF_TOKEN",
+- GOOGLE_CREDENTIALS_BASE64  [Service Account credentials, gives a JSON file, need to encode it as a b64 format and decrypt it to be used normally]
+- GOOGLE_API_KEY 
+- TAVILY_API_KEY
+- GROQ_API_KEY
+- HF_TOKEN
 
 ### 6️⃣ Start the FastAPI Server
 
