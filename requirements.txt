@@ -15,3 +15,4 @@ APScheduler
 python-multipart
 pillow
 google-genai
+google-generativeai
