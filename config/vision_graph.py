@@ -93,7 +93,7 @@ def process_image_llama(state: OverAllState):
 
     chat_completion = client.chat.completions.create(
         messages=messages,
-        model="llama-3.2-11b-vision-preview"
+        model="meta-llama/llama-4-scout-17b-16e-instruct"
     )
 
     # Correct variable name used for response extraction.
