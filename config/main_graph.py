@@ -223,7 +223,7 @@ def ner_extraction_validator(state: OverAllState):
     medical_report = state.get("medical_report","")
 
     llm_gemini = ChatGoogleGenerativeAI(api_key=os.getenv("GOOGLE_API_KEY"),
-                            model="gemini-2.0-flash-exp",
+                            model="gemini-2.5-flash",
                             credentials=creds
                             )
 
@@ -265,7 +265,7 @@ def ner_report_builder_node(state: OverAllState):
     post_ner_data = state["post_ner_data"]
 
     llm_gemini = ChatGoogleGenerativeAI(api_key=os.getenv("GOOGLE_API_KEY"),
-                                model="gemini-2.0-flash-exp",
+                                model="gemini-2.5-flash",
                                 credentials=creds
                                 )
 
