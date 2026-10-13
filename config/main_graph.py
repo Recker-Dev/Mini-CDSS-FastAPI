@@ -187,7 +187,7 @@ def search_web_best_pracs(state: WebSearchState):
         }]}
 
     best_pracs = [
-        {"disease": disease, "url": r["url"], "content": r["content"]}
+        {"disease": disease, "url": r["url"], "content": r["content"], "provider": r.get("provider")}
         for r in results
     ]
     return {"best_practises": best_pracs}

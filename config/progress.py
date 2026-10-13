@@ -37,6 +37,8 @@ def main_graph_event(node_name: str, update):
         best_practises = update.get("best_practises", []) or []
         if best_practises:
             disease = best_practises[0].get("disease", "condition")
+            provider = best_practises[0].get("provider")
+            via = f" · via {provider}" if provider else ""
             n = len(best_practises)
             lines = []
             for b in best_practises:
@@ -47,7 +49,7 @@ def main_graph_event(node_name: str, update):
                 snippet = (snippet[:140] + "…") if len(snippet) > 140 else snippet
                 lines.append(f"- [{url}]({url})" + (f"\n  {snippet}" if snippet else ""))
             detail = "\n".join(lines) or None
-            return {"label": f"🌐 {disease}: {n} source(s)", "detail": detail}
+            return {"label": f"🌐 {disease}: {n} source(s){via}", "detail": detail}
         return {"label": "🌐 Searching best practices…"}
 
     # No-op interrupt node / interrupt marker: nothing useful to show.

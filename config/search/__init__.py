@@ -17,11 +17,13 @@ def web_search(query: str, max_results: int = 5, pro: bool = False):
     pro=False (default) -> SearXNG primary, Tavily fallback.
     pro=True ("Search Pro") -> Tavily primary, SearXNG fallback.
     """
-    primary, fallback = (tavily, searxng) if pro else (searxng, tavily)
-    for provider in (primary, fallback):
+    order = (("tavily", tavily), ("searxng", searxng)) if pro else (("searxng", searxng), ("tavily", tavily))
+    for name, provider in order:
         try:
             results = provider.search(query, max_results)
             if results:
+                for r in results:
+                    r["provider"] = name
                 return results
         except Exception:
             continue
