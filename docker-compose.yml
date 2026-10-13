@@ -1,0 +1,69 @@
+name: mini-cdss
+
+# All environment/infra-specific values (ports, origins, network names) come from
+# .env via ${VAR} interpolation, so nothing sensitive is committed. See .env.example.
+
+services:
+  # ---- FastAPI backend ----------------------------------------------------
+  minicdss-backend:
+    build: .
+    image: minicdss:latest
+    container_name: minicdss-backend
+    command: ["uv", "run", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "${BACKEND_PORT}"]
+    env_file:
+      - .env
+    environment:
+      # Reach the LLM service by its internal (service-name) origin.
+      LOCAL_LLM_BASE_URL: ${LLM_BASE_URL_DOCKER}
+    expose:
+      - "${BACKEND_PORT}"
+    networks:
+      - app-net   # reachable by the frontend and the tunnel
+      - llm-net   # reach the LLM service
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:${BACKEND_PORT}/ping')"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  # ---- Streamlit frontend -------------------------------------------------
+  minicdss-frontend:
+    build: .
+    image: minicdss:latest           # same image; built once, reused (BuildKit caches)
+    container_name: minicdss-frontend
+    command: ["uv", "run", "streamlit", "run", "frontend/1_🩺_Homepage.py",
+              "--server.port", "${FRONTEND_PORT}", "--server.address", "0.0.0.0", "--server.headless", "true"]
+    env_file:
+      - .env
+    environment:
+      # Talk to the backend by its internal (service-name) origin.
+      BACKEND_URL: ${BACKEND_URL_DOCKER}
+    expose:
+      - "${FRONTEND_PORT}"
+    # Uncomment to hit the UI from the host while testing (otherwise route it
+    # through your tunnel on the app network -> minicdss-frontend:${FRONTEND_PORT}).
+    # ports:
+    #   - "127.0.0.1:${FRONTEND_PORT}:${FRONTEND_PORT}"
+    depends_on:
+      minicdss-backend:
+        condition: service_healthy
+    networks:
+      - app-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:${FRONTEND_PORT}/_stcore/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+networks:
+  # Network *keys* are generic; the real external network names come from .env.
+  app-net:
+    name: ${APP_NET}
+    external: true
+  llm-net:
+    name: ${LLM_NET}
+    external: true
