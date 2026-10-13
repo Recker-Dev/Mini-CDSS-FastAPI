@@ -12,7 +12,7 @@ import base64
 from typing import List
 
 from config.fastapi_models import Thread,GraphInput,PrelimInterrupt,APIInput,RagChat,VisionInput,VisionFeedback
-from config.validate_api import validate_keys
+from config.validate_api import validate_keys, health_report
 from config.main_graph import graph, stream_ner_report, stream_prelim_report, stream_bestprac_report
 from config.rag import rag_graph, stream_rag_answer
 from config.medical_summarizer_graph import medical_insights_graph, stream_medical_report
@@ -41,6 +41,11 @@ load_dotenv()
 @app.get("/ping")
 def root():
     return "PONG"
+
+@app.get("/health")
+def health():
+    """Aggregate health: backend, local LLM, and Tavily web search."""
+    return health_report()
 
 def my_shutdown_job():
     print(f"Server shutting down at {datetime.datetime.now()}")
