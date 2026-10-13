@@ -1,20 +1,15 @@
 from langgraph.graph import START,END,StateGraph, MessagesState
 from langgraph.checkpoint.memory import MemorySaver
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langgraph.constants import Send
 from .hugging_face_ner import  ner_extractor
-from .credentials import creds
+from .llm import chat, chat_stream, structured, sys, user
+from .prompts import load_prompt
 
-from langchain_groq import ChatGroq
-from langchain_google_genai import ChatGoogleGenerativeAI
 from tavily import TavilyClient
 from dotenv import load_dotenv
 import os
 
 load_dotenv()
-
-# from llm import llm_gemini,llm_groq
-# from main_graph_tools import tavily_client
 
 
 
@@ -86,134 +81,11 @@ class WebSearchState(BaseModel):
     disease: str
 
 
-ner_validation_agent_sys_instruction ="""
-You are an expert NER (Named Entity Recognition) agent specialized in extracting medical entities from text. 
-Your task is to accurately identify and label entities such as diseases, symptoms, treatments, medications, 
-anatomical locations, lab tests, and other medical terms. You are provided with both user text and a Hugging Face 
-domain expert model output. Your goal is to refine, validate, and correct the extracted entities for medical accuracy.
-
-### **Instructions:**
-1. **Accurate Entity Recognition**  
-   - Identify and extract only relevant medical entities with high precision.  
-   - Ensure alignment with standard medical ontologies such as **UMLS** or **SNOMED**.  
-
-2. **Context-Aware Classification**  
-   - Categorize entities correctly into sections such as **Symptoms, Diagnoses, Treatments, Medications, 
-     Vital Signs, and Lab Tests** based on context.  
-   - Avoid misclassification—each entity must belong to the appropriate category.  
-
-3. **Validation and Error Correction**  
-   - Cross-check extracted entities against both the **user-provided text** and the **Hugging Face model output**.  
-   - Fix any inaccuracies, misclassifications, or missing entities.  
-   - Ensure no entity is duplicated or incorrectly tagged.  
-
-4. **No Overlapping or Redundant Entities**  
-   - Each entity should be placed in **only one relevant section**—no duplication across categories.  
-   - Example: A value should not appear in both **Vital Signs** and **Lab Tests**—place it in the most 
-     appropriate section.  
-
-5. **Extra Summary Criteria**
-    - To be provided only when any details is not enclosed by the model class. 
-    - Should not repeat values of from **Vital Signs** or **Lab Tests**
-    - Must be unique.
-
-"""
-
-
-ner_report_writer_agent_sys_instruction = """You are an expert NER Report writer on medical data.
-Your task is to:
-1. Format all text using Markdown syntax for clarity and readability, begin with ## Patient Initial Report always!
-2. Ensure medical details are accurate and well-structured.
-3. Use bullet points for clarity.
-4. Follow a consistent section order as in the example.
-5. Do not include unnecessary information—only what is extracted from NER.
-
-Sample Format:
-**Patient Details**  
-- ...
-- ...
-
-**Presenting Complaint**  
-- ...
-- ...
-
-**Vital Signs**  
-- ... 
-- ...
-
-**Laboratory Values**  
-- ...
-- ...
-
-**Treatment Initiated**  
-- ... 
-
-**Extra Details**
-- ...
-"""
-
-prelim_diagnosis_sys_instructions = """You are a clinical decision assistant. Your job is to help
-clinicians and healthcare provider with {diagnosis_count} unique but relevant diagnosis. You will be
-provided with relevant patient details, such as age,sex,complaints,history,vital signs, lab values etc.
-Based on the provided details come up with the most relevant diagnosis.
-
-Examine any editorial feedback that has been optionally provided to guide the diagnosis:
-{human_prelim_feedback}
-
-"""
-
-prelim_report_writer_agent_sys_instruction = """You are an expert Prelim Report writer on medical data.  
-Your task is to:  
-1. Format all text using **Markdown syntax** for clarity and readability, always begin with ## Prelim Diagnosis Report always!.  
-2. Ensure medical details are **accurate, well-structured, and concise**.  
-3. Use **clear section sub-headers, bullet points and numbering** for readability.  
-4. Maintain a **consistent order** for each diagnosis:  
-   - **Diagnosis**  
-   - **Disease Description**  
-   - **Clinical Reasoning**  
-   - **Recommendations**  
-5. Include only the **necessary extracted medical details**, avoiding redundant information.  
-
-**Sample Format:**  
-## Prelim Diagnosis Report  
-
-### **Diagnosis Name**  
-**📌 Disease Description:**  
-- ...  
-
-**🧠 Clinical Reasoning:**  
-- ...  
-
-**✅ Recommendations:**  
-- ...  
-- ...  
-- ...  
-
-You are provided with a list of Preliminary Diagnoses, do this for each, number them accordingly.
-"""
-
-best_pracs_report_writer_agent_sys_instruction = """You are an expert **Best Practices Medical Report Writer**.  
-Your task is to:  
-
-1. Format all text using **Markdown syntax** for clarity and readability, always beginning with `## Best Practices Report`.  
-2. Ensure the content is **accurate, structured, and concise**, emphasizing **practical guidance**.  
-3. Use **clear sub-headers, bullet points, and numbering** to enhance readability.  
-4. If a disease has multiple sources, **group them together**, mention the **total number of sources** in brackets, and list them in the given format.  
-5. Include only **relevant and actionable medical insights**, avoiding unnecessary details.  
-
-### **Example Format:**  
-
-## Best Practices Report  
-
-### **🩺 Disease Name** [2 sources]  
-- **🔗 Source:** [URL]  
-  - **📖 Summary:** ....  
-
-- **🔗 Source:** [URL]  
-  - **📖 Summary:** ....  
-
-Repeat this format for each disease in the provided data.  
-"""
+# Prompts live in prompts/*.md — see config/prompts.py.
+ner_validation_agent_sys_instruction = load_prompt("ner_validation")
+ner_report_writer_agent_sys_instruction = load_prompt("ner_report_writer")
+prelim_diagnosis_sys_instructions = load_prompt("prelim_diagnosis")
+prelim_report_writer_agent_sys_instruction = load_prompt("prelim_report_writer")
 
 
 
@@ -222,79 +94,42 @@ def ner_extraction_validator(state: OverAllState):
     initial_summary = state["initial_summary"]
     medical_report = state.get("medical_report","")
 
-    llm_gemini = ChatGoogleGenerativeAI(api_key=os.getenv("GOOGLE_API_KEY"),
-                            model="gemini-2.5-flash",
-                            credentials=creds
-                            )
+    summarized_report = chat([
+        sys(load_prompt("summarizer")),
+        user(f"Here is the intial-report of the patient: {initial_summary} and the medical extracts (if any) drawn out {medical_report}"),
+    ])
 
-    summarized_report = llm_gemini.invoke(
-        [SystemMessage(content="Your task is to summarize all the content that is given to you. Leave no medical details out, no matter how small. Output is in text-string format and not markdown, avoid special characters.")]+ 
-        [HumanMessage(content= f"Here is the intial-report of the patient: {initial_summary} and the medical extracts (if any) drawn out {medical_report}")]
-    )
-
-    # tagged_tokens, unique_tags = process_ner_output(initial_summary+" "+medical_report)
-    # report = generate_clean_ner_report(tagged_tokens, unique_tags)
+    # Optional Hugging Face NER augmentation; skips cleanly if HF_TOKEN is unset.
     try:
-        ner_report = ner_extractor(summarized_report.content)
-    except:
+        ner_report = ner_extractor(summarized_report)
+    except Exception:
         ner_report = ""
 
-    llm_groq = ChatGroq(
-        model="llama-3.1-8b-instant",
-        temperature=0,
-        max_tokens=None,
-        api_key=os.getenv("GROQ_API_KEY")
-    )
-
     ## Enforce the structured output
-    structured_llm = llm_groq.with_structured_output(NERReport)
+    post_ner_data = structured([
+        sys(ner_validation_agent_sys_instruction),
+        user(f"Validate the NER Report made by hugging face model (if any) : {ner_report}, on the input text of: {summarized_report}"),
+    ], NERReport)
 
-    # sys_mssg = ner_validation_agent_sys_instruction
-
-    post_ner_data = structured_llm.invoke(
-        [SystemMessage(content=ner_validation_agent_sys_instruction)]+[HumanMessage(
-            content=f"Validate the NER Report made by hugging face model (if any) : {ner_report}, on the input text of: {summarized_report.content}")]
-        )
-
-    
     return {"post_ner_data":post_ner_data}
 
-def ner_report_builder_node(state: OverAllState):
-
-    """Create a NER Report in Mardown Format. """
-    post_ner_data = state["post_ner_data"]
-
-    llm_gemini = ChatGoogleGenerativeAI(api_key=os.getenv("GOOGLE_API_KEY"),
-                                model="gemini-2.5-flash",
-                                credentials=creds
-                                )
-
-    report = llm_gemini.invoke(
-        [SystemMessage(content=ner_report_writer_agent_sys_instruction)]+ [HumanMessage(content= f"Use this following extract to draft a report: {post_ner_data}")]
-    )
-
-    return {"ner_report": report.content}
+def stream_ner_report(post_ner_data):
+    """Stream the NER report prose (markdown), token-by-token, from structured data."""
+    yield from chat_stream([
+        sys(ner_report_writer_agent_sys_instruction),
+        user(f"Use this following extract to draft a report: {post_ner_data}"),
+    ], max_tokens=None)
 
 def prelim_diagnosis_node(state: OverAllState):
     """Perform Prelim Diagnosis on the Patient Summary"""
     post_ner_data = state["post_ner_data"]
 
-    # print(F"FEEDBACK PROVIDED AS OF NOW:{state.get("human_prelim_feedback","")}")
-
-    ## Enfore Output
-    llm_gemini = ChatGoogleGenerativeAI(api_key=os.getenv("GOOGLE_API_KEY"),
-                                model="gemini-2.0-flash-exp",
-                                credentials=creds
-                                )
-
-    structured_llm = llm_gemini.with_structured_output(Diagnoses)
-
-    diagnoses = structured_llm.invoke(
-        [SystemMessage(content=prelim_diagnosis_sys_instructions.format(diagnosis_count= state["diagnosis_count"], 
-                                                                        human_prelim_feedback= state.get("human_prelim_feedback","")))]
-        + [HumanMessage(
-            content=f"Patient Data is as follows: {post_ner_data}. Give back relevant diagnoses.")]
-    )
+    ## Enforce Output
+    diagnoses = structured([
+        sys(prelim_diagnosis_sys_instructions.format(diagnosis_count= state["diagnosis_count"],
+                                                     human_prelim_feedback= state.get("human_prelim_feedback",""))),
+        user(f"Patient Data is as follows: {post_ner_data}. Give back relevant diagnoses."),
+    ], Diagnoses)
 
     return {"diagnoses":diagnoses}
     
@@ -312,19 +147,12 @@ def should_continue_edge_for_prelim(state: OverAllState):
     
     return "extract diseases"
 
-def prelim_report_builder_node(state:OverAllState):
-    """Create Prelim Report in NER format"""
-    llm_gemini = ChatGoogleGenerativeAI(api_key=os.getenv("GOOGLE_API_KEY"),
-                                model="gemini-2.0-flash-exp",
-                                credentials=creds
-                                )
-    
-    prelim_report = llm_gemini.invoke(
-        [SystemMessage(content=prelim_report_writer_agent_sys_instruction)]
-         + [HumanMessage(content=f"Draft the Prelimn Report, context: {state['diagnoses'].list_of_diags}")]
-    )
-
-    return {"prelim_report": prelim_report.content}
+def stream_prelim_report(diagnoses):
+    """Stream the Preliminary Diagnosis report prose from the structured diagnoses."""
+    yield from chat_stream([
+        sys(prelim_report_writer_agent_sys_instruction),
+        user(f"Draft the Prelimn Report, context: {diagnoses.list_of_diags}"),
+    ], max_tokens=None)
 
 def extract_diseases(state:OverAllState):
     """Extract the diseases and updates the state"""
@@ -339,6 +167,14 @@ def trigger_web_search(state:OverAllState):
 
 def search_web_best_pracs(state: WebSearchState):
     """Retrieve docs from web-search"""
+    # Tavily is an optional remote service; skip gracefully if no key is set.
+    if not os.getenv("TAVILY_API_KEY"):
+        return {"best_practises": [{
+            "disease": state["disease"],
+            "url": "",
+            "content": "Web search skipped: TAVILY_API_KEY is not set.",
+        }]}
+
     tavily_client=TavilyClient(api_key=os.environ["TAVILY_API_KEY"])
 
     # Search
@@ -356,36 +192,56 @@ def search_web_best_pracs(state: WebSearchState):
 
     return {"best_practises":best_pracs}
 
-def best_pracs_report_builder_node(state: OverAllState):
-    """Best Practises Report Writing Node"""
-    llm_gemini = ChatGoogleGenerativeAI(api_key=os.getenv("GOOGLE_API_KEY"),
-                                model="gemini-2.0-flash-exp",
-                                credentials=creds
-                                )
-    
-    best_practise_report = llm_gemini.invoke(
-        [SystemMessage(content=best_pracs_report_writer_agent_sys_instruction)]
-         + [HumanMessage(content=f"Draft the Best Practises Report, context: {state['best_practises']}")]
-    )
-
-    return {"best_practise_report": best_practise_report.content}
+best_pracs_section_sys_instruction = load_prompt("best_practices_section")
 
 
+def stream_bestprac_report(best_practises):
+    """Stream the Best Practises report, one disease section at a time.
+
+    Each disease's section is generated independently (small, so it never hits the
+    token ceiling) and the sections run concurrently across the server's parallel
+    slots. Sections are yielded in order as they become ready.
+    """
+    import concurrent.futures
+    from collections import OrderedDict
+
+    # Group the gathered sources by disease, preserving first-seen order.
+    by_disease = OrderedDict()
+    for item in best_practises:
+        by_disease.setdefault(item["disease"], []).append(item)
+
+    def build_section(sources):
+        return chat([
+            sys(best_pracs_section_sys_instruction),
+            user(f"Write the section for this disease from these sources: {sources}"),
+        ], max_tokens=None)
+
+    yield "## Best Practices Report\n\n"
+
+    diseases = list(by_disease.keys())
+    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as ex:
+        futures = {d: ex.submit(build_section, by_disease[d]) for d in diseases}
+        # Yield in disease order; concurrency means later sections are usually
+        # already done by the time we reach them.
+        for d in diseases:
+            yield futures[d].result()
+            yield "\n\n"
+
+
+# The graph produces the *structured* work (NER data, diagnoses, web sources).
+# The prose reports are streamed on demand from the endpoints via the
+# stream_* helpers above, so they appear token-by-token and can be fetched
+# concurrently.
 builder = StateGraph(OverAllState)
 builder.add_node("perform and validate NER extractions", ner_extraction_validator)
-builder.add_node("write NER report",ner_report_builder_node)
 builder.add_node("perform preliminary diagnosis node", prelim_diagnosis_node)
 builder.add_node("prelim human feedback node", prelim_human_feedback)
-builder.add_node("write prelim report", prelim_report_builder_node)
 builder.add_node("extract diseases", extract_diseases)
 builder.add_node("search web for best practises", search_web_best_pracs)
-builder.add_node("write best practises report", best_pracs_report_builder_node)
 
 builder.add_edge(START, "perform and validate NER extractions")
-builder.add_edge("perform and validate NER extractions", "write NER report")
 builder.add_edge("perform and validate NER extractions", "perform preliminary diagnosis node")
-builder.add_edge("perform preliminary diagnosis node","write prelim report" )
-builder.add_edge("write prelim report", "prelim human feedback node")
+builder.add_edge("perform preliminary diagnosis node", "prelim human feedback node")
 builder.add_conditional_edges(
     "prelim human feedback node",
     should_continue_edge_for_prelim,
@@ -396,7 +252,7 @@ builder.add_conditional_edges(
     trigger_web_search,
     ["search web for best practises"]
 )
-builder.add_edge("search web for best practises","write best practises report")
+builder.add_edge("search web for best practises", END)
 
 memory = MemorySaver()
 

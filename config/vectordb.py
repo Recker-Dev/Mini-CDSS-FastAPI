@@ -1,10 +1,9 @@
 import chromadb
 import os
 from langchain_community.document_loaders import PyPDFLoader
-import chromadb.utils.embedding_functions as embedding_functions
 from typing import List, Tuple
 from fastapi import UploadFile
-from google.api_core.exceptions import InvalidArgument
+from .llm import get_embedding_function
 
 # Define the persist directory and collection name.
 PERSIST_DIRECTORY = ".chroma"
@@ -23,15 +22,17 @@ def delete_vector_collection(chroma_client, collection_name: str) -> Tuple[bool,
     except Exception as e:
         return False, f"Unable to delete collection: {e}"
 
-async def create_vector_db(uploaded_files: List[UploadFile], gemini_api_key: str, thread_id: str) -> Tuple[bool, str]:
+async def create_vector_db(uploaded_files: List[UploadFile], thread_id: str) -> Tuple[bool, str]:
     """
     Creates a new vector database from uploaded PDF files.
     Deletes the old collection (if it exists) using PersistentClient,
     then loads and splits the PDFs, builds embeddings, and persists the DB.
-    
+
+    Embeddings run locally (all-MiniLM-L6-v2) via the shared embedding function.
+
     Parameters:
-        uploaded_files: List of Streamlit uploaded file objects.
-    
+        uploaded_files: List of uploaded file objects.
+
     Returns:
         (True, success_message) or (False, error_message)
     """
@@ -47,11 +48,7 @@ async def create_vector_db(uploaded_files: List[UploadFile], gemini_api_key: str
         if not success:
             return False, msg
 
-    try:  
-        google_ef  = embedding_functions.GoogleGenerativeAiEmbeddingFunction(api_key=gemini_api_key)
-    except InvalidArgument:
-        return False, "Invalid Gemini API Key"
-    collection = chroma_client.create_collection(name=f"{thread_id}_{COLLECTION_NAME}", embedding_function=google_ef)
+    collection = chroma_client.create_collection(name=f"{thread_id}_{COLLECTION_NAME}", embedding_function=get_embedding_function())
 
 
     # Process the uploaded files.

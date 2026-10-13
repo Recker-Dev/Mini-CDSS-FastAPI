@@ -1,15 +1,6 @@
-from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_groq import ChatGroq
 import os
 from langgraph.graph import START,END,StateGraph, MessagesState
 from langgraph.checkpoint.memory import MemorySaver
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
-from groq import  Groq
-from google import genai
-import base64
-from google.genai import types
-from .credentials import creds
-import time
 
 from dotenv import load_dotenv
 
@@ -18,6 +9,27 @@ load_dotenv()
 
 from typing_extensions import  TypedDict, Literal
 from pydantic import BaseModel
+
+# ---------------------------------------------------------------------------
+# Vision is currently DISABLED (graceful early-exit).
+#
+# The original graph ran image understanding through Gemini Vision + Groq's
+# Llama-4 vision model. The current local model (Qwen3.5) is text-only (no
+# vision projector / mmproj), so it cannot process images.
+#
+# The graph structure below is kept fully intact so vision can be restored
+# later: re-point the image nodes at a multimodal model and flip VISION_SUPPORTED
+# to True. Until then, every node simply returns the message below and the graph
+# exits cleanly instead of calling any remote service.
+# ---------------------------------------------------------------------------
+VISION_SUPPORTED = False
+
+VISION_UNSUPPORTED_MESSAGE = (
+    "Vision capabilities are not supported by the current local model. "
+    "The configured model (Qwen3.5) is text-only. To enable image analysis, "
+    "serve a vision-capable (multimodal) model and set VISION_SUPPORTED = True "
+    "in config/vision_graph.py."
+)
 
 class OverAllState(TypedDict):
     query: str
@@ -68,108 +80,39 @@ def get_user_query(state:OverAllState):
     pass
 
 def process_image_llama(state: OverAllState):
-    client = Groq(api_key=os.getenv("GROQ_API_KEY")) 
-    query = state["query"]
-    base64_image = state["base64_image"]
-    human_feedback = state.get("feedback","")
+    # Disabled: the local model has no vision. Restore the Groq Llama-4 vision
+    # call here (see git history) once a multimodal backend is available.
+    if not VISION_SUPPORTED:
+        return {"llama_response": VISION_UNSUPPORTED_MESSAGE}
 
-    messages = [
-        {
-            "role": "user",
-            "content": [
-                {
-                    "type": "text",
-                    "text": f"{query}. Consider this feeback(if any): {human_feedback}"
-                },
-                {
-                    "type": "image_url",
-                    "image_url": {
-                        "url": f"data:image/jpeg;base64,{base64_image}"
-                    }
-                }
-            ]
-        }
-    ]
-
-    chat_completion = client.chat.completions.create(
-        messages=messages,
-        model="meta-llama/llama-4-scout-17b-16e-instruct"
-    )
-
-    # Correct variable name used for response extraction.
-    response = chat_completion.choices[0].message.content
-
-    return {"llama_response": response}
-
-    
 
 
 
 def process_image_gemini(state: OverAllState):
-    """Processes an image with Google Gemini Vision model."""
-    query = state["query"]
-    base64_image = state["base64_image"]
-    human_feedback = state.get("feedback","")
-    # Decode base64 string to bytes
-    image_bytes = base64.b64decode(base64_image)
-
-    # Call Gemini Vision API
-    client = genai.Client(credentials=creds)
-    response = client.models.generate_content(
-        model="gemini-2.0-flash-exp",
-        contents=[
-            f"{query}.Consider this feeback(if any): {human_feedback}",
-            types.Part.from_bytes(data=image_bytes, mime_type="image/jpeg")
-        ],
-    )
-
-    return {"gemini_response": response.text}
+    """Processes an image with a vision model (disabled while text-only)."""
+    # Disabled: restore the multimodal call here once VISION_SUPPORTED is True.
+    if not VISION_SUPPORTED:
+        return {"gemini_response": VISION_UNSUPPORTED_MESSAGE}
 
 
 
 
 def build_answer(state: OverAllState):
-    # if (state["gemini_response"] or state["llama_response"] ) and (state["prompt_analyzer_response"] == "yes"):
-    human_feedback = state.get("feedback","")
-    prev_answer = state.get("answer","")
-
-    # llm_gemini = ChatGoogleGenerativeAI(api_key=os.getenv("GOOGLE_API_KEY"),
-    #                          model="gemini-2.0-flash-exp",
-    #                          credentials=creds)
-    
-    llm_groq = ChatGroq(
-        model="llama-3.3-70b-versatile",
-        temperature=0,
-        max_tokens=None,
-        api_key=os.getenv("GROQ_API_KEY")
-    )
-
-    response = llm_groq.invoke(answer_writing_instruction.format(gemini_output=state["gemini_response"],
-                                                                   llama_output= state["llama_response"])+f"Consider the feedback(if any): {human_feedback} and the report generated(if any): {prev_answer} ")
-
-    return {"answer":response.content}
+    # Without vision there is nothing to summarize; surface the clear message.
+    if not VISION_SUPPORTED:
+        return {"answer": VISION_UNSUPPORTED_MESSAGE}
 
 
 def human_feedback(state: OverAllState):
     pass
 
 def should_trigger_feedback_edge(state: OverAllState):
-    human_feedback = state.get("feedback","")
-    llm_gemini = ChatGoogleGenerativeAI(api_key=os.getenv("GOOGLE_API_KEY"),
-                             model="gemini-2.0-flash-exp",
-                             credentials=creds)
-
-    structured_llm = llm_gemini.with_structured_output(VisionModelDecisionEdgeOutput)
-    response = structured_llm.invoke([HumanMessage(content=f"Based on the feedback provided decide wether to retrigger vision models/ rebuild answer/ end graph. Feeback: {human_feedback}")])
-
-    if response.outcome == "retrigger image models":
-        return ["process image llama","process image gemini"]
-    
-    if response.outcome == "rebuild answer":
-        return "build answer"
-    
-    if response.outcome == "end":
+    # Vision is disabled, so no retriggering is possible; end the graph cleanly.
+    if not VISION_SUPPORTED:
         return END
+
+    # (When vision is restored, bring back the feedback-routing LLM call here.)
+    return END
 
 
 # Build a simple graph with one node.

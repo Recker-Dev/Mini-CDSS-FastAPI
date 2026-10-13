@@ -9,14 +9,15 @@ import os
 import datetime
 import base64
 
-from typing import List, Optional
+from typing import List
 
 from config.fastapi_models import Thread,GraphInput,PrelimInterrupt,APIInput,RagChat,VisionInput,VisionFeedback
 from config.validate_api import validate_keys
-from config.main_graph import graph
-from config.rag import rag_graph
-from config.medical_summarizer_graph import medical_insights_graph
+from config.main_graph import graph, stream_ner_report, stream_prelim_report, stream_bestprac_report
+from config.rag import rag_graph, stream_rag_answer
+from config.medical_summarizer_graph import medical_insights_graph, stream_medical_report
 from config.vision_graph import vision_graph
+from config.progress import sse, main_graph_event, rag_event
 
 
 from cron.jobs import scheduler
@@ -53,21 +54,21 @@ def on_shutdown():
 
 @app.post("/validate_and_set_api")
 async def validating_api(input_data: APIInput):
-    response=validate_keys(tav_api=input_data.tavily,gemini_api=input_data.gemini,groq_api=input_data.groq)
-    if response =="Validated":
-        os.environ["TAVILY_API_KEY"] = input_data.tavily
-        os.environ["GEMINI_API_KEY"] = input_data.gemini
-        os.environ["GROQ_API_KEY"] = input_data.groq
+    # The only hard dependency now is the local LLM. Tavily (web search) is
+    # optional; if a key is provided we store it, otherwise web search is skipped.
+    response = validate_keys()
+    if response == "Validated":
+        if input_data.tavily:
+            os.environ["TAVILY_API_KEY"] = input_data.tavily
     else:
         raise HTTPException(status_code=400, detail=response)
-    
+
     return {"response":response}
 
 @app.post("/set_api")
 async def setting_api(input_data: APIInput):
-    os.environ["TAVILY_API_KEY"] = input_data.tavily
-    os.environ["GEMINI_API_KEY"] = input_data.gemini
-    os.environ["GROQ_API_KEY"] = input_data.groq
+    if input_data.tavily:
+        os.environ["TAVILY_API_KEY"] = input_data.tavily
 
 
 @app.post("/graphstart/")
@@ -75,16 +76,15 @@ async def graphstart(input_data: GraphInput):
     # logger.debug(f'{input_data}')
     async def event_stream():
         thread = {"configurable": {"thread_id": input_data.thread_id}}
-        for event in graph.stream({"initial_summary": input_data.text, 
+        for event in graph.stream({"initial_summary": input_data.text,
                                    "diagnosis_count": input_data.diagnosis_count,
                                    "medical_report": input_data.medical_report}, thread, stream_mode="updates"):
-            node_name = next(iter(event.keys()))
-            yield f"data: {node_name}\n\n"
-        
+            for node_name, update in event.items():
+                ev = main_graph_event(node_name, update)
+                if ev:
+                    yield sse(ev)
+
     return StreamingResponse(event_stream(), media_type="text/event-stream")
-
-
-            # await asyncio.sleep(1)
 
 
 
@@ -97,68 +97,70 @@ async def prelim_human_feedback(prelim_feedback: PrelimInterrupt):
 
     async def event_stream():
         for event in graph.stream(None, thread, stream_mode="updates"):
-            node_name = next(iter(event.keys()))
-            yield f"data: {node_name}\n\n"
-            # await asyncio.sleep(1)
-        
+            for node_name, update in event.items():
+                ev = main_graph_event(node_name, update)
+                if ev:
+                    yield sse(ev)
+
     return StreamingResponse(event_stream(), media_type="text/event-stream")
     
 
 
 @app.post("/nerReport")
 async def ner_report(thread: Thread):
-    # final_state = graph.get_state(thread)
-    # ner_report = final_state.values.get('ner_report')
-    # return {"ner_report":ner_report}
     thread = {"configurable": {"thread_id": thread.thread_id}}
+    post_ner_data = graph.get_state(thread).values.get('post_ner_data')
+
     async def event_stream():
-        final_state = graph.get_state(thread)
-        ner_report = final_state.values.get('ner_report')
-        yield f"{ner_report}"
-        
+        if post_ner_data is None:
+            yield "No NER data available. Run /graphstart/ first."
+            return
+        for chunk in stream_ner_report(post_ner_data):
+            yield chunk
+
     return StreamingResponse(event_stream(), media_type="text/event-stream")
 
 @app.post("/prelimReport")
 async def prelim_report(thread: Thread):
-    # thread = {"configurable": {"thread_id": thread.thread_id}}
-    # final_state = graph.get_state(thread)
-    # prelim_report = final_state.values.get('prelim_report')
-    # return {"prelim_report":prelim_report}
-
     thread = {"configurable": {"thread_id": thread.thread_id}}
+    diagnoses = graph.get_state(thread).values.get('diagnoses')
+
     async def event_stream():
-        final_state = graph.get_state(thread)
-        prelim_report = final_state.values.get('prelim_report')
-        yield f"{prelim_report}"
+        if diagnoses is None:
+            yield "No diagnoses available. Run /graphstart/ first."
+            return
+        for chunk in stream_prelim_report(diagnoses):
+            yield chunk
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
 
 @app.post("/bestpracReport")
 async def best_prac_report(thread: Thread):
     thread = {"configurable": {"thread_id": thread.thread_id}}
+    best_practises = graph.get_state(thread).values.get('best_practises')
+
     async def event_stream():
-        final_state = graph.get_state(thread)
-        best_prac_report = final_state.values.get('best_practise_report')
-        yield f"{best_prac_report}"
-        
+        if not best_practises:
+            yield "No best-practices data available. Complete the diagnosis flow first."
+            return
+        for chunk in stream_bestprac_report(best_practises):
+            yield chunk
+
     return StreamingResponse(event_stream(), media_type="text/event-stream")
 
 @app.post("/addFilesAndCreateVectorDB")
 async def add_files(
     thread_id: str= Form(...),
-    gemini_api_key: Optional[str] = Form(None),
     files: List[UploadFile] = File(...),
 ):
     """
     Endpoint to upload PDF files and create a vector database.
-    The API key for the embedding function is supplied as a form field.
+    Embeddings are computed locally; no API key is required.
     """
     # DEBUG: Check if files are received correctly
 
     try:
-        if not gemini_api_key:
-            gemini_api_key = os.environ["GOOGLE_API_KEY"] 
-        success, message = await create_vector_db(files, gemini_api_key,thread_id)
+        success, message = await create_vector_db(files, thread_id)
         if not success:
             raise HTTPException(status_code=400, detail=message)
         
@@ -175,11 +177,6 @@ async def add_files(
     
 @app.post("/ragSearch")
 async def rag_chat(input_data: RagChat):
-    if not input_data.gemini:
-        gemini = os.environ["GOOGLE_API_KEY"]
-    else:
-        gemini = input_data.gemini
-        
     COLLECTION_NAME="vectorDB"
 
     async def event_stream():
@@ -188,23 +185,32 @@ async def rag_chat(input_data: RagChat):
             "question": input_data.question,
             "max_queries": 3,
             "collection_path": f"{input_data.thread_id}_{COLLECTION_NAME}",
-            "gemini_api": gemini,
             "allowed_call_count": 2,
             "expired_call_count": 0
         }, thread):
-            node_name = next(iter(event.keys()))
-            yield f"data: {node_name}\n\n"
-        
+            for node_name, update in event.items():
+                ev = rag_event(node_name, update)
+                if ev:
+                    yield sse(ev)
+
     return StreamingResponse(event_stream(), media_type="text/event-stream")
     
 
 @app.post("/ragAnswer")
 async def rag_answer(thread: Thread):
     thread = {"configurable": {"thread_id": thread.thread_id}}
+    values = rag_graph.get_state(thread).values
+    question = values.get('question')
+    docs_retrieved = values.get('docs_retrieved')
+    relevance = values.get('relevance')
+
     def event_stream():
-        final_state = rag_graph.get_state(thread)
-        answer = final_state.values.get('answer')
-        yield f"{answer}"
+        if question is None:
+            yield "No query found. Run /ragSearch first."
+            return
+        for chunk in stream_rag_answer(question, docs_retrieved, relevance):
+            yield chunk
+
     return StreamingResponse(event_stream(), media_type="text/event-stream")
 
 
@@ -254,19 +260,29 @@ async def extract_medical_details(
 @app.post("/medicalInsightReport")
 async def medical_report_insight(thread: Thread):
     thread = {"configurable": {"thread_id": thread.thread_id}}
+    medical_insights = medical_insights_graph.get_state(thread).values.get('medical_insights')
+
     async def event_stream():
-        final_state = medical_insights_graph.get_state(thread)
-        medical_report = final_state.values.get('medical_report')
-        yield f"{medical_report}"
-        
+        if not medical_insights:
+            yield "No medical insights available. Run /extractMedicalDetails first."
+            return
+        for chunk in stream_medical_report(medical_insights):
+            yield chunk
+
     return StreamingResponse(event_stream(), media_type="text/event-stream")
 
 
 
+# --- Vision endpoints -------------------------------------------------------
+# The vision graph is intact but currently disabled (text-only local model);
+# every call flows through the graph and returns a clear "not supported" answer.
+# Re-enable by serving a multimodal model and flipping VISION_SUPPORTED in
+# config/vision_graph.py.
+
 @app.post("/input-image/")
 async def input_image(thread_id:str=Form(...), image: UploadFile = File(...)):
     """API endpoint to start vision graph with an image."""
-    
+
     async def start_graph(thread_id:str, base64_image: str):
         """Invoke graph with base64 image."""
         thread = {"configurable": {"thread_id": thread_id}}
@@ -276,10 +292,10 @@ async def input_image(thread_id:str=Form(...), image: UploadFile = File(...)):
         # Convert image to Base64
         image_bytes = await image.read()
         base64_image = base64.b64encode(image_bytes).decode("utf-8")
-        
+
         # Trigger graph function and await result
         await start_graph(thread_id, base64_image)
-        
+
         return {"graph started, image input success!"}
 
     except Exception as e:
@@ -298,8 +314,8 @@ async def input_query_for_image(input_data:VisionInput):
         return {"Graph was resumed and query was taken into account. Check formed answer"}
     except Exception as e:
         return {f"graph failed, error: {e}"}
-    
-    
+
+
 @app.post("/vision-answer/")
 async def process_image_answer(input_data:Thread):
 
@@ -309,7 +325,7 @@ async def process_image_answer(input_data:Thread):
             final_state = vision_graph.get_state(thread)
             answer = final_state.values.get('answer')
             yield f"{answer}"
-        
+
     return StreamingResponse(event_stream(), media_type="text/event-stream")
 
 
@@ -325,6 +341,6 @@ async def process_vision_feedback(input_data:VisionFeedback):
         await resume_graph(input_data.thread_id,input_data.feedback)
         return {"Graph was resumed and feedback was taken into account."}
     except Exception as e:
-        return {f"graph failed, error: {e}"} 
+        return {f"graph failed, error: {e}"}
 
 

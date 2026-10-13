@@ -111,9 +111,15 @@ import os
 
 
 def ner_extractor(input_text):
+    # Optional remote augmentation. If no HF token is configured, skip it; the
+    # caller falls back to an empty NER report and the local LLM does the work.
+    hf_token = os.getenv("HF_TOKEN")
+    if not hf_token:
+        return {}
+
     client = InferenceClient(
 	provider="hf-inference",
-	api_key=os.environ["HF_TOKEN"]
+	api_key=hf_token
     )
 
     result = client.token_classification(

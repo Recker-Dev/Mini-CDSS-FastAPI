@@ -18,14 +18,16 @@ class PrelimInterrupt(BaseModel):
     human_feedback: Optional[str] = None ## Pass empty string for trigerring None
 
 class APIInput(BaseModel):
-    gemini: str
-    groq: str
-    tavily: str
+    # Only Tavily (optional web search) is still used. gemini/groq are accepted
+    # for backwards compatibility with older clients but ignored.
+    tavily: Optional[str] = None
+    gemini: Optional[str] = None
+    groq: Optional[str] = None
 
 class RagChat(BaseModel):
     thread_id: str
     question: str
-    gemini: Optional[str]  
+    gemini: Optional[str] = None
     
 class VisionInput(BaseModel):
     thread_id: str
