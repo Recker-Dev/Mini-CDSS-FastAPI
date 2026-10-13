@@ -1,0 +1,16 @@
+# Secrets / env
+.env
+
+# uv / virtualenv
+.venv/
+
+# Python caches
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# ChromaDB persisted data
+.chroma/
+
+# Temp upload artifacts
+temp_*

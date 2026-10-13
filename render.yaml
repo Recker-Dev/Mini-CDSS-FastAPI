@@ -1,9 +1,10 @@
 services:
-  # A Docker web service
-  - type: server
-    name: fastapi-example
+  # A Python web service
+  - type: web
+    name: mini-cdss-fastapi
     runtime: python
     plan: free
     autoDeploy: false
-    buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    # Uses uv for a fast, reproducible install from the lockfile (backend extra only).
+    buildCommand: pip install uv && uv sync --frozen --no-dev --extra backend
+    startCommand: uv run uvicorn main:app --host 0.0.0.0 --port $PORT

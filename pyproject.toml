@@ -1,0 +1,38 @@
+[project]
+name = "mini-cdss"
+version = "0.1.0"
+description = "Mini Clinical Decision Support System — FastAPI backend + Streamlit frontend, powered by a local OpenAI-compatible LLM."
+readme = "README.md"
+requires-python = ">=3.11,<3.13"
+# Shared by both the backend and the frontend.
+dependencies = [
+    "python-dotenv",
+]
+
+[project.optional-dependencies]
+# Backend (FastAPI + LangGraph + local LLM/embeddings). Install: uv sync --extra backend
+backend = [
+    "fastapi",
+    "uvicorn[standard]",
+    "python-multipart",
+    "pydantic",
+    "langgraph",
+    "langchain-core",
+    "langchain-community",
+    "langchain-text-splitters",
+    "openai",
+    "chromadb",
+    "pypdf",
+    "tavily-python",
+    "apscheduler",
+    "huggingface-hub",
+]
+# Frontend (Streamlit). Install: uv sync --extra frontend
+frontend = [
+    "streamlit",
+    "requests",
+    "pillow",
+]
+
+[tool.uv]
+package = false
