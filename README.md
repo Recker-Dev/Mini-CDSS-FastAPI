@@ -34,6 +34,8 @@ AIM: Founding Steps of Next-gen CDSS systems, incorporating Gen-AI in report bui
 │   ├── llm                      # Shared local LLM (OpenAI client) + local embedding function.
 │   ├── prompts.py               # Loads system prompts from prompts/*.md (cached).
 │   ├── progress.py              # Maps graph node updates -> frontend progress events.
+│   ├── pdf.py                   # Renders the report markdown into a styled (warm/minimal) PDF.
+│   ├── report_store.py          # Captures streamed report text per thread (source for the PDF).
 │   ├── fastapi_models           # API Endpoint pydantic structure
 │   ├── hugging_face_ner         # Runs Hugging Face model on intial patient encounter data to extract relevant entities, and returns an entity dict.
 │   ├── main_graph               # The main code dedicated to NER Report, Prelim Report, Feedback Loop and Best Practise Report Generation Logic.
@@ -136,6 +138,8 @@ collapsible "🧠 Reasoning" panel (identified conditions, best-practice sources
 | POST   | `/nerReport`                 | Returns the NER Report of patient encounter.                         |
 | POST   | `/prelimReport`              | Returns the Prelim Report of patient encounter.                      |
 | POST   | `/bestpracReport`            | Returns the Best Practises Report of patient encounter.              |
+| GET    | `/reportPdf?thread_id=`      | Styled PDF of the finalized report (NER + prelim + best practices).  |
+| GET    | `/health`                    | Aggregate status: backend, local LLM, Tavily.                        |
 | POST   | `/addFilesAndCreateVectorDB` | Logic to create a vector DB and overwrite if existing.               |
 | POST   | `/ragSearch`                 | Used to search the docs.                                             |
 | POST   | `/ragAnswer`                 | Returns the rag answer.                                              |

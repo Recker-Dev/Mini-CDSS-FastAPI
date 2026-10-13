@@ -26,6 +26,8 @@ backend = [
     "tavily-python",
     "apscheduler",
     "huggingface-hub",
+    "markdown",
+    "xhtml2pdf",
 ]
 # Frontend (Streamlit). Install: uv sync --extra frontend
 frontend = [

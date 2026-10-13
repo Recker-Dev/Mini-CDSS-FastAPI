@@ -25,6 +25,18 @@ FASTAPI_URL_RAG_SEARCH = f"{BACKEND_URL}/ragSearch"
 FASTAPI_URL_RAG_ANSWER = f"{BACKEND_URL}/ragAnswer"
 FASTAPI_URL_EXTRACT_MEDICAL_TRIGGER = f"{BACKEND_URL}/extractMedicalDetails"
 FASTAPI_URL_EXTRACT_MEDICAL_DETAILS = f"{BACKEND_URL}/medicalInsightReport"
+FASTAPI_URL_REPORT_PDF = f"{BACKEND_URL}/reportPdf"
+
+
+def fetch_report_pdf(thread_id: str):
+    """Download the backend-rendered report PDF (bytes), or None on failure."""
+    try:
+        resp = requests.get(FASTAPI_URL_REPORT_PDF, params={"thread_id": thread_id}, timeout=60)
+        if resp.status_code == 200:
+            return resp.content
+    except Exception:
+        pass
+    return None
 
 
 def stream_report(url: str, payload: dict):
@@ -227,6 +239,10 @@ def main_chat():
 
                 st.session_state.main_chat_history.append({"role": "assistant", "content": final_report})
 
+                # The backend captured each section while streaming; fetch the
+                # styled PDF it cooked and keep it for the download button.
+                st.session_state.report_pdf = fetch_report_pdf(st.session_state.thread_id)
+
                 # Add follow-up message from assistant
                 follow_up_msg = "A comprehensive patient report has been generated! You may clear the medical insights by clicking `Clear Previous Medical Insights` and enter 'START' to retrigger the graph for another patient!"
                 st.session_state.main_chat_history.append({"role": "assistant", "content": follow_up_msg})
@@ -253,6 +269,15 @@ def main_chat():
                 follow_up_msg = "Kindly enter any feedback if you got any for us to retrigger the whole process, if not enter 'satisfied' to proceed!"
                 st.session_state.main_chat_history.append({"role": "assistant", "content": follow_up_msg})
                 st.chat_message("assistant").markdown(follow_up_msg)
+
+    # Persisted download button for the finalized report PDF (survives reruns).
+    if st.session_state.get("report_pdf"):
+        st.download_button(
+            "⬇️ Download report (PDF)",
+            data=st.session_state.report_pdf,
+            file_name=f"mini-cdss-report-{st.session_state.thread_id[:8]}.pdf",
+            mime="application/pdf",
+        )
 
 
 def rag_chat():

@@ -18,6 +18,9 @@ from config.rag import rag_graph, stream_rag_answer
 from config.medical_summarizer_graph import medical_insights_graph, stream_medical_report
 from config.vision_graph import vision_graph
 from config.progress import sse, main_graph_event, rag_event
+from config.report_store import set_report, get_reports
+from config.pdf import build_report_pdf
+from fastapi import Response
 
 
 from cron.jobs import scheduler
@@ -113,45 +116,72 @@ async def prelim_human_feedback(prelim_feedback: PrelimInterrupt):
 
 @app.post("/nerReport")
 async def ner_report(thread: Thread):
-    thread = {"configurable": {"thread_id": thread.thread_id}}
+    thread_id = thread.thread_id
+    thread = {"configurable": {"thread_id": thread_id}}
     post_ner_data = graph.get_state(thread).values.get('post_ner_data')
 
     async def event_stream():
         if post_ner_data is None:
             yield "No NER data available. Run /graphstart/ first."
             return
+        buf = []
         for chunk in stream_ner_report(post_ner_data):
+            buf.append(chunk)
             yield chunk
+        set_report(thread_id, "ner", "".join(buf))
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
 
 @app.post("/prelimReport")
 async def prelim_report(thread: Thread):
-    thread = {"configurable": {"thread_id": thread.thread_id}}
+    thread_id = thread.thread_id
+    thread = {"configurable": {"thread_id": thread_id}}
     diagnoses = graph.get_state(thread).values.get('diagnoses')
 
     async def event_stream():
         if diagnoses is None:
             yield "No diagnoses available. Run /graphstart/ first."
             return
+        buf = []
         for chunk in stream_prelim_report(diagnoses):
+            buf.append(chunk)
             yield chunk
+        set_report(thread_id, "prelim", "".join(buf))
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
 
 @app.post("/bestpracReport")
 async def best_prac_report(thread: Thread):
-    thread = {"configurable": {"thread_id": thread.thread_id}}
+    thread_id = thread.thread_id
+    thread = {"configurable": {"thread_id": thread_id}}
     best_practises = graph.get_state(thread).values.get('best_practises')
 
     async def event_stream():
         if not best_practises:
             yield "No best-practices data available. Complete the diagnosis flow first."
             return
+        buf = []
         for chunk in stream_bestprac_report(best_practises):
+            buf.append(chunk)
             yield chunk
+        set_report(thread_id, "bestprac", "".join(buf))
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+@app.get("/reportPdf")
+def report_pdf(thread_id: str):
+    """Build a styled PDF from the report text captured during the streaming step."""
+    reports = get_reports(thread_id)
+    parts = [reports.get(k) for k in ("ner", "prelim", "bestprac") if reports.get(k)]
+    if not parts:
+        raise HTTPException(status_code=404, detail="No report available yet. Generate the report first.")
+
+    pdf_bytes = build_report_pdf("\n\n".join(parts))
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="mini-cdss-report-{thread_id[:8]}.pdf"'},
+    )
 
 @app.post("/addFilesAndCreateVectorDB")
 async def add_files(
