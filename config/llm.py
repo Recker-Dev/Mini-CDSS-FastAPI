@@ -39,9 +39,11 @@ if not BASE_URL or not MODEL:
         "Example: LOCAL_LLM_BASE_URL=http://localhost:55555/v1, LOCAL_LLM_MODEL=qwen3.5"
     )
 
-# Qwen3.5 (and other hybrid-reasoning models) expose a "thinking" mode; we keep
-# it off so responses are fast and free of <think> preambles.
-_EXTRA_BODY = {"chat_template_kwargs": {"enable_thinking": False}}
+# Qwen3.5 (and other hybrid-reasoning models) expose a "thinking" mode. Kept off
+# by default: it's verbose, slow, and breaks grammar-constrained structured output
+# on an 8k slot. Toggle via LOCAL_LLM_ENABLE_THINKING if you ever want it globally.
+ENABLE_THINKING = os.getenv("LOCAL_LLM_ENABLE_THINKING", "false").strip().lower() in ("1", "true", "yes", "on")
+_EXTRA_BODY = {"chat_template_kwargs": {"enable_thinking": ENABLE_THINKING}}
 
 client = OpenAI(base_url=BASE_URL, api_key=API_KEY)
 
