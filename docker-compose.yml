@@ -13,8 +13,9 @@ services:
     env_file:
       - .env
     environment:
-      # Reach the LLM service by its internal (service-name) origin.
+      # Reach the LLM + SearXNG services by their internal (service-name) origins.
       LOCAL_LLM_BASE_URL: ${LLM_BASE_URL_DOCKER}
+      SEARXNG_URL: ${SEARXNG_URL_DOCKER}
     expose:
       - "${BACKEND_PORT}"
     networks:

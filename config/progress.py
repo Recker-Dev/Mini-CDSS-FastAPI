@@ -31,12 +31,23 @@ def main_graph_event(node_name: str, update):
         return {"label": "🏷️ Identified conditions", "detail": detail}
 
     if node_name == "search web for best practises":
-        # Each Send fan-out surfaces one disease's sources.
+        # Each Send fan-out surfaces one disease's sources. Include the RAW
+        # retrieved results (url + snippet) — the data the report LLM later
+        # formats — so the reasoning panel shows real evidence.
         best_practises = update.get("best_practises", []) or []
         if best_practises:
             disease = best_practises[0].get("disease", "condition")
             n = len(best_practises)
-            return {"label": f"🌐 {disease}: {n} best-practice source(s)"}
+            lines = []
+            for b in best_practises:
+                url = b.get("url", "")
+                snippet = (b.get("content", "") or "").strip().replace("\n", " ")
+                if not url:
+                    continue
+                snippet = (snippet[:140] + "…") if len(snippet) > 140 else snippet
+                lines.append(f"- [{url}]({url})" + (f"\n  {snippet}" if snippet else ""))
+            detail = "\n".join(lines) or None
+            return {"label": f"🌐 {disease}: {n} source(s)", "detail": detail}
         return {"label": "🌐 Searching best practices…"}
 
     # No-op interrupt node / interrupt marker: nothing useful to show.

@@ -12,6 +12,7 @@ class  GraphInput(BaseModel):
     text: str
     diagnosis_count: str
     medical_report: str
+    web_search_pro: bool = False  # True -> Tavily ("Search Pro"); False -> SearXNG
 
 class PrelimInterrupt(BaseModel):
     thread_id: str

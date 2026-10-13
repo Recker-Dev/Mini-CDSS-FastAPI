@@ -86,7 +86,8 @@ async def graphstart(input_data: GraphInput):
         thread = {"configurable": {"thread_id": input_data.thread_id}}
         for event in graph.stream({"initial_summary": input_data.text,
                                    "diagnosis_count": input_data.diagnosis_count,
-                                   "medical_report": input_data.medical_report}, thread, stream_mode="updates"):
+                                   "medical_report": input_data.medical_report,
+                                   "web_search_pro": input_data.web_search_pro}, thread, stream_mode="updates"):
             for node_name, update in event.items():
                 ev = main_graph_event(node_name, update)
                 if ev:

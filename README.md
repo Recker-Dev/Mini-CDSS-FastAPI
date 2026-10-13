@@ -36,6 +36,7 @@ AIM: Founding Steps of Next-gen CDSS systems, incorporating Gen-AI in report bui
 │   ├── progress.py              # Maps graph node updates -> frontend progress events.
 │   ├── pdf.py                   # Renders the report markdown into a styled (warm/minimal) PDF.
 │   ├── report_store.py          # Captures streamed report text per thread (source for the PDF).
+│   ├── search/                  # Web search: searxng.py + tavily.py providers + dispatcher.
 │   ├── fastapi_models           # API Endpoint pydantic structure
 │   ├── hugging_face_ner         # Runs Hugging Face model on intial patient encounter data to extract relevant entities, and returns an entity dict.
 │   ├── main_graph               # The main code dedicated to NER Report, Prelim Report, Feedback Loop and Best Practise Report Generation Logic.

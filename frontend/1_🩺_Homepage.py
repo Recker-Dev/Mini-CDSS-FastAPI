@@ -194,7 +194,8 @@ def main_chat():
                 "thread_id": st.session_state.thread_id,
                 "text": report_text,
                 "diagnosis_count": "3",
-                "medical_report":st.session_state.get("medical_insights","")
+                "medical_report":st.session_state.get("medical_insights",""),
+                "web_search_pro": st.session_state.get("web_search_pro", False)
             }
 
             # Surface the graph flow live in a collapsible reasoning panel
@@ -367,6 +368,13 @@ def main():
                     st.error(f"Error {response.status_code}: {response.text}")
             except Exception as e:
                 st.error(f"Error connecting to backend: {e}")
+
+        # Search Pro: off -> SearXNG (local, free); on -> Tavily (premium web).
+        st.session_state.web_search_pro = st.toggle(
+            "Enable Search Pro",
+            value=st.session_state.get("web_search_pro", False),
+            help="Off: SearXNG (local). On: Tavily premium web search for the Best-Practices step.",
+        )
 
         # Enable RAG toggle
         st.session_state.enable_rag = st.toggle("Enable RAG Chat (Upload Documents)", value=st.session_state.get("enable_rag", False))

@@ -4,8 +4,8 @@ from langgraph.constants import Send
 from .hugging_face_ner import  ner_extractor
 from .llm import chat, chat_stream, structured, sys, user
 from .prompts import load_prompt
+from .search import web_search
 
-from tavily import TavilyClient
 from dotenv import load_dotenv
 import os
 
@@ -64,6 +64,7 @@ class OverAllState(TypedDict):
     initial_summary: str
     medical_report: str
     diagnosis_count: int
+    web_search_pro: bool
 
     diseases: List[str]
 
@@ -79,6 +80,7 @@ class OverAllState(TypedDict):
 
 class WebSearchState(BaseModel):
     disease: str
+    web_search_pro: bool = False
 
 
 # Prompts live in prompts/*.md — see config/prompts.py.
@@ -163,34 +165,32 @@ def extract_diseases(state:OverAllState):
 
 def trigger_web_search(state:OverAllState):
     """Use Send() API to dig for best practises per disease"""
-    return [Send("search web for best practises", {"disease":d}) for d in state["diseases"]]
+    pro = state.get("web_search_pro", False)
+    return [Send("search web for best practises", {"disease": d, "web_search_pro": pro})
+            for d in state["diseases"]]
 
 def search_web_best_pracs(state: WebSearchState):
-    """Retrieve docs from web-search"""
-    # Tavily is an optional remote service; skip gracefully if no key is set.
-    if not os.getenv("TAVILY_API_KEY"):
+    """Retrieve best-practice sources per disease (SearXNG primary, Tavily fallback).
+
+    The query avoids the word "best" (it makes metasearch return dictionary hits)
+    and leans on clinical phrasing instead.
+    """
+    disease = state["disease"]
+    query = f"{disease} treatment guidelines clinical management"
+    results = web_search(query, max_results=5, pro=state.get("web_search_pro", False))
+
+    if not results:
         return {"best_practises": [{
-            "disease": state["disease"],
+            "disease": disease,
             "url": "",
-            "content": "Web search skipped: TAVILY_API_KEY is not set.",
+            "content": "No web results found (search provider unavailable or returned nothing).",
         }]}
 
-    tavily_client=TavilyClient(api_key=os.environ["TAVILY_API_KEY"])
-
-    # Search
-    res = tavily_client.search(f"What are the best medical practises for: {state['disease']}")
-    best_pracs =[]
-    for doc in res["results"]:
-        url = doc["url"]
-        content = doc["content"]
-        best_pracs.append(
-            {
-            "disease":state["disease"],
-            "url": url,
-            "content": content
-            })
-
-    return {"best_practises":best_pracs}
+    best_pracs = [
+        {"disease": disease, "url": r["url"], "content": r["content"]}
+        for r in results
+    ]
+    return {"best_practises": best_pracs}
 
 best_pracs_section_sys_instruction = load_prompt("best_practices_section")
 

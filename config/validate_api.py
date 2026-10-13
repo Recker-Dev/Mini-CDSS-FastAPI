@@ -46,24 +46,12 @@ def check_llm() -> dict:
         return {"status": "down", "model": MODEL}
 
 
-def check_tavily() -> dict:
-    """Live check of Tavily web search. 'not_configured' if no key is set."""
-    key = os.getenv("TAVILY_API_KEY")
-    if not key:
-        return {"status": "not_configured"}
-    try:
-        from tavily import TavilyClient
-
-        TavilyClient(api_key=key).search("health check", max_results=1)
-        return {"status": "up"}
-    except Exception:
-        return {"status": "down"}
-
-
 def health_report() -> dict:
-    """Aggregate status for the backend, the local LLM, and Tavily web search."""
+    """Aggregate status for the backend, the local LLM, and web search."""
+    from .search import search_health
+
     return {
         "backend": "ok",
         "llm": check_llm(),
-        "tavily": check_tavily(),
+        "search": search_health(),
     }

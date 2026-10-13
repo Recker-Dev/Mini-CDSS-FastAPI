@@ -28,6 +28,7 @@ backend = [
     "huggingface-hub",
     "markdown",
     "xhtml2pdf",
+    "requests",
 ]
 # Frontend (Streamlit). Install: uv sync --extra frontend
 frontend = [
